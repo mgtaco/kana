@@ -1,0 +1,402 @@
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.75rem, 4vw, 2.75rem);
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  letter-spacing: -0.03em;
+}
+
+.lede {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  max-width: 46ch;
+  margin-top: 0.3rem;
+}
+
+.toggle {
+  display: inline-flex;
+  padding: 0.22rem;
+  gap: 0.15rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.toggleOption {
+  position: relative;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.toggleOption[data-active='true'] {
+  color: var(--text);
+}
+
+.togglePill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  z-index: 0;
+}
+
+.toggleText {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.75rem, 4vw, 2.75rem);
+}
+
+/* Wide screens get the three tables side by side rather than one long scroll. */
+@media (min-width: 62rem) {
+  .sections {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: clamp(2rem, 6vw, 4.5rem);
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.75rem, 4vw, 2.75rem);
+  min-width: 0;
+}
+
+@media (min-width: 62rem) {
+  /* Size to content so both tables keep the same cell size, and cap the width
+     so a long section subtitle can't stretch one column past the other. */
+  .column {
+    flex: 0 0 auto;
+    max-width: 27rem;
+  }
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  font-size: 1.15rem;
+}
+
+.sectionSub {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.grid {
+  display: grid;
+  gap: clamp(0.25rem, 1vw, 0.45rem);
+  width: 100%;
+  /* max-width is set per section from its column count, keeping cells square
+     and around 4.5rem instead of ballooning on wide screens. */
+}
+
+.columnHead,
+.rowHead {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.rowHead {
+  min-height: 2rem;
+}
+
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: clamp(9px, 1.6vw, 14px);
+  background: var(--surface);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.cell:hover {
+  border-color: var(--accent-line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.cellGlyph {
+  font-size: clamp(1.35rem, 4.4vw, 2rem);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Yōon are two characters wide, so they need to come down a size to stay on
+   one line inside a square cell. */
+.cellGlyphWide {
+  font-size: clamp(1.05rem, 3.4vw, 1.6rem);
+}
+
+.cellRomaji {
+  font-size: clamp(0.58rem, 1.5vw, 0.72rem);
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.cellRare {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.32rem;
+  font-size: 0.6rem;
+  color: var(--text-faint);
+  line-height: 1;
+}
+
+.masteryDot {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 0.36rem;
+  height: 0.36rem;
+  border-radius: 50%;
+}
+
+.empty {
+  border-radius: clamp(9px, 1.6vw, 14px);
+  aspect-ratio: 1;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 5px,
+      color-mix(in srgb, var(--line) 70%, transparent) 5px,
+      color-mix(in srgb, var(--line) 70%, transparent) 6px
+    );
+  opacity: 0.35;
+}
+
+.footnote {
+  font-size: 0.82rem;
+  color: var(--text-faint);
+  max-width: 60ch;
+}
+
+.cta {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.5rem;
+}
+
+/* ── Detail sheet ─────────────────────────────────────────────────────────── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-2) 55%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.sheet {
+  position: relative;
+  width: 100%;
+  max-width: 30rem;
+  padding: 1.5rem 1.35rem calc(1.5rem + env(safe-area-inset-bottom));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  box-shadow: var(--shadow-lg);
+}
+
+.grabber {
+  width: 2.5rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+  margin: -0.5rem auto 1rem;
+}
+
+.sheetClose {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  color: var(--text-faint);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.sheetClose:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.sheetMain {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.sheetGlyph {
+  font-size: 4.6rem;
+  line-height: 1;
+  flex: none;
+}
+
+.sheetGlyphWide {
+  font-size: 3.2rem;
+}
+
+.sheetInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.sheetRomaji {
+  font-size: 1.9rem;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.sheetAlt {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.sheetBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-start;
+  margin-top: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+}
+
+.example {
+  margin-top: 1.2rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.exampleWord {
+  font-family: var(--font-kana);
+  font-size: 1.35rem;
+  line-height: 1.3;
+}
+
+.exampleMeta {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.sheetNav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.navBtn:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.navGlyph {
+  font-family: var(--font-kana);
+}
+
+@media (min-width: 40rem) {
+  .overlay {
+    align-items: center;
+    padding: var(--gutter);
+  }
+
+  .sheet {
+    border-radius: var(--radius-xl);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1.5rem;
+  }
+
+  .grabber {
+    display: none;
+  }
+}

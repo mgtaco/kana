@@ -1,0 +1,44 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+  background: color-mix(in srgb, var(--bg-2) 62%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.dialog {
+  width: min(26rem, 100%);
+  padding: 1.4rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.title {
+  font-size: 1.12rem;
+  margin-bottom: 0.4rem;
+}
+
+.body {
+  color: var(--text-muted);
+  font-size: 0.94rem;
+  margin-bottom: 1.25rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.danger {
+  background: var(--danger);
+  color: var(--danger-ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.danger:hover {
+  filter: brightness(1.06);
+}

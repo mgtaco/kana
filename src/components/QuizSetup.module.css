@@ -1,0 +1,267 @@
+.setup {
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.title {
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  letter-spacing: -0.03em;
+}
+
+.lede {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  max-width: 50ch;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.blockHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.blockTitle {
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.blockHint {
+  font-size: 0.82rem;
+  color: var(--text-faint);
+}
+
+/* ── Character sets ───────────────────────────────────────────────────────── */
+
+.setGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+
+.setOption {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.setOption:hover {
+  border-color: var(--line-strong);
+}
+
+.setOption[data-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.setLabelRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.setLabel {
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.setCount {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.setOption[data-selected='true'] .setCount {
+  color: var(--accent);
+}
+
+.setSample {
+  font-family: var(--font-kana);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+
+.tick {
+  display: grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  color: transparent;
+  flex: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.setOption[data-selected='true'] .tick {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ── Modes ────────────────────────────────────────────────────────────────── */
+
+.modeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.6rem;
+}
+
+.modeOption {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.modeOption:hover {
+  border-color: var(--line-strong);
+}
+
+.modeOption[data-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.modeIcon {
+  color: var(--text-faint);
+}
+
+.modeOption[data-selected='true'] .modeIcon {
+  color: var(--accent);
+}
+
+.modeTitle {
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.modeBody {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* ── Length ───────────────────────────────────────────────────────────────── */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.chip {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.chip:hover {
+  border-color: var(--line-strong);
+}
+
+.chip[data-selected='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+
+.footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 0 calc(0.9rem + env(safe-area-inset-bottom));
+  background: var(--bg);
+}
+
+/* Soft fade so content scrolling under the bar doesn't cut off abruptly. */
+.footer::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 100% 0;
+  height: 1.75rem;
+  background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
+}
+
+.summary {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-right: auto;
+  max-width: 30ch;
+}
+
+.warning {
+  color: var(--danger);
+  font-size: 0.88rem;
+  margin-right: auto;
+}
+
+@media (max-width: 30rem) {
+  .footer :global(.btn) {
+    flex: 1;
+  }
+
+  .summary,
+  .warning {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

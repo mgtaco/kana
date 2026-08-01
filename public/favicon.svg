@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#c8452f" />
+  <text
+    x="32"
+    y="33"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="'Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif"
+    font-size="42"
+    fill="#fdf8f3"
+  >あ</text>
+</svg>

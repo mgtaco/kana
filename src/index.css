@@ -1,0 +1,192 @@
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   Warm washi-paper surfaces with an indigo accent. Correctness feedback keeps
+   green and red to itself, so the accent never reads as a verdict.
+
+   Both palettes live in one place via light-dark(); `color-scheme` on :root
+   decides which side wins, and the theme toggle only has to flip that. */
+
+:root {
+  color-scheme: light dark;
+
+  --font-ui:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-kana:
+    'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo',
+    'MS PGothic', var(--font-ui);
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --bg: light-dark(#f5f1ea, #14120f);
+  --bg-2: light-dark(#ece5da, #0e0d0b);
+  --surface: light-dark(#fffdfa, #211d18);
+  --surface-2: light-dark(#f7f3ec, #29231b);
+  --surface-3: light-dark(#ece4d7, #342d24);
+  --text: light-dark(#1c1917, #f4efe7);
+  --text-muted: light-dark(#6b6259, #a89e90);
+  --text-faint: light-dark(#9a9086, #7d7467);
+  --line: light-dark(#e4dbcd, #383129);
+  --line-strong: light-dark(#d3c7b5, #4c4337);
+
+  --accent: light-dark(#2e5aa8, #8ab0f0);
+  --accent-hover: light-dark(#26508f, #a4c3f6);
+  --accent-ink: light-dark(#ffffff, #10192b);
+  --accent-soft: light-dark(#e7eef8, #1c2740);
+  --accent-line: light-dark(#bed3ec, #324565);
+
+  --success: light-dark(#157a58, #5cc99c);
+  --success-ink: light-dark(#ffffff, #0b2019);
+  --success-soft: light-dark(#e0f1e9, #172a21);
+  --success-line: light-dark(#a7d8c4, #2f5947);
+
+  --danger: light-dark(#b4342a, #f0897c);
+  --danger-ink: light-dark(#ffffff, #2a100c);
+  --danger-soft: light-dark(#fbe7e4, #2e1a16);
+  --danger-line: light-dark(#f0bcb5, #5c332c);
+
+  --seal: light-dark(#c8452f, #e4674c);
+
+  /* light-dark() resolves colours only, so shadows are built from colour tokens. */
+  --shadow-1: light-dark(rgb(28 25 23 / 6%), rgb(0 0 0 / 38%));
+  --shadow-2: light-dark(rgb(28 25 23 / 10%), rgb(0 0 0 / 55%));
+  --shadow-sm: 0 1px 2px var(--shadow-1);
+  --shadow-md: 0 4px 12px var(--shadow-2), 0 1px 3px var(--shadow-1);
+  --shadow-lg: 0 18px 40px var(--shadow-2), 0 4px 12px var(--shadow-1);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 130ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
+
+  --page-max: 68rem;
+  --gutter: clamp(1rem, 4vw, 2rem);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--surface) 70%, transparent), transparent 60%),
+    radial-gradient(70% 55% at 100% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 65%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-wrap: break-word;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Shared primitives ────────────────────────────────────────────────────── */
+
+.kana-glyph {
+  font-family: var(--font-kana);
+  font-weight: 400;
+  line-height: 1;
+  font-feature-settings: 'palt' 0;
+  /* Yōon such as きゃ are two code points but one syllable — never break them. */
+  white-space: nowrap;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
