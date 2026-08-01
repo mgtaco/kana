@@ -324,9 +324,14 @@ function useInkMargins(
     };
 
     measure();
+    // Again after paint, in case metrics were not final on the first pass.
+    const frame = requestAnimationFrame(measure);
     window.addEventListener('resize', measure);
     document.fonts?.ready.then(measure).catch(() => {});
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', measure);
+    };
   }, [promptRef, answerRef, questionKey]);
 
   return margins;
