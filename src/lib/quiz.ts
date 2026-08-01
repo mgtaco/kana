@@ -23,12 +23,15 @@ export interface Question {
   isRetry: boolean;
 }
 
+/** `skipped` is a miss the learner owned up to rather than guessed at. */
+export type Verdict = 'correct' | 'wrong' | 'skipped';
+
 export interface Answer {
   kana: Kana;
   mode: QuestionMode;
   isRetry: boolean;
-  correct: boolean;
-  /** What the learner typed, or the kana they picked. */
+  verdict: Verdict;
+  /** What the learner typed or picked; empty when they skipped. */
   given: string;
   elapsedMs: number;
 }
@@ -166,6 +169,7 @@ export interface KanaOutcome {
   /** Missed at first, then answered correctly when it came back around. */
   recovered: boolean;
   wrongAnswers: string[];
+  skips: number;
   totalMs: number;
 }
 
@@ -194,6 +198,7 @@ export function summarize(answers: Answer[], elapsedMs: number): QuizSummary {
         firstTryCorrect: false,
         recovered: false,
         wrongAnswers: [],
+        skips: 0,
         totalMs: 0,
       };
       byKana.set(answer.kana.kana, outcome);
@@ -201,9 +206,11 @@ export function summarize(answers: Answer[], elapsedMs: number): QuizSummary {
 
     outcome.attempts += 1;
     outcome.totalMs += answer.elapsedMs;
-    if (answer.correct) {
+    if (answer.verdict === 'correct') {
       if (!answer.isRetry && outcome.attempts === 1) outcome.firstTryCorrect = true;
       else outcome.recovered = true;
+    } else if (answer.verdict === 'skipped') {
+      outcome.skips += 1;
     } else {
       outcome.wrongAnswers.push(answer.given);
     }
@@ -215,7 +222,7 @@ export function summarize(answers: Answer[], elapsedMs: number): QuizSummary {
   let bestStreak = 0;
   let streak = 0;
   for (const answer of answers) {
-    streak = answer.correct ? streak + 1 : 0;
+    streak = answer.verdict === 'correct' ? streak + 1 : 0;
     if (streak > bestStreak) bestStreak = streak;
   }
 

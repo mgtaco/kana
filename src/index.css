@@ -43,6 +43,12 @@
   --danger-soft: light-dark(#fbe7e4, #2e1a16);
   --danger-line: light-dark(#f0bcb5, #5c332c);
 
+  /* A third verdict, for answers the learner passed on rather than got wrong. */
+  --warning: light-dark(#96690f, #f0b45c);
+  --warning-ink: light-dark(#ffffff, #2a1d06);
+  --warning-soft: light-dark(#fbf0da, #2c2211);
+  --warning-line: light-dark(#e8cd93, #584425);
+
   --seal: light-dark(#c8452f, #e4674c);
 
   /* light-dark() resolves colours only, so shadows are built from colour tokens. */

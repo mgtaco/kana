@@ -266,7 +266,10 @@ function Stat({
 
 function MissRow({ outcome, index }: { outcome: KanaOutcome; index: number }) {
   const wrong = outcome.wrongAnswers.filter(Boolean);
-  const detail = wrong.length > 0 ? `you said ${wrong.map((w) => `“${w}”`).join(', ')}` : '';
+  const parts: string[] = [];
+  if (outcome.skips > 0) parts.push(outcome.skips > 1 ? 'skipped twice' : 'skipped');
+  if (wrong.length > 0) parts.push(`you said ${wrong.map((w) => `“${w}”`).join(', ')}`);
+  const detail = parts.join(' · ');
 
   return (
     <motion.div

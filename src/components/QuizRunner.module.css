@@ -111,55 +111,133 @@
 }
 
 .glyphWrap {
+  position: relative;
   display: grid;
   place-items: center;
   width: 100%;
+  overflow: hidden;
   /* dvh so the card gives way when a mobile keyboard opens. */
-  min-height: clamp(7rem, 26dvh, 15rem);
-  padding: 0.5rem 1rem;
+  min-height: clamp(8rem, 28dvh, 15rem);
+  /* Bottom padding leaves room for a caption that wraps to two lines. */
+  padding: 1.5rem 1rem 3.6rem;
   border-radius: var(--radius-xl);
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-md);
-  transition: border-color var(--dur-base) var(--ease-out);
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
-.glyphWrap[data-state='correct'] {
-  border-color: var(--success-line);
+.glyphWrap[data-verdict='correct'] {
+  border-color: var(--success);
+  box-shadow: 0 0 0 1px var(--success), var(--shadow-md);
 }
 
-.glyphWrap[data-state='wrong'] {
-  border-color: var(--danger-line);
+.glyphWrap[data-verdict='wrong'] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger), var(--shadow-md);
 }
 
-.glyph {
+.glyphWrap[data-verdict='skipped'] {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 1px var(--warning), var(--shadow-md);
+}
+
+/* Prompt and answer sit side by side; the row stays centred as a pair, so
+   revealing the answer slides the prompt to the left of its own accord. */
+.revealRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.7rem, 3vw, 1.4rem);
+  max-width: 100%;
+}
+
+.prompt {
+  position: relative;
+  z-index: 2;
+  /* Opaque, so the answer really is hidden behind it before it slides out. */
+  background: var(--surface);
+  padding-inline: 0.08em;
   line-height: 1;
   text-align: center;
 }
 
-.glyphSingle {
-  font-size: clamp(5rem, 27vw, 9rem);
+.promptKana {
+  font-size: clamp(4.5rem, 25vw, 8.5rem);
 }
 
-.glyphDouble {
-  font-size: clamp(3.6rem, 19vw, 6.5rem);
+.promptKanaWide {
+  font-size: clamp(3.2rem, 17vw, 6rem);
 }
 
 .promptRomaji {
-  font-size: clamp(2.8rem, 15vw, 4.6rem);
+  font-size: clamp(2.6rem, 14vw, 4.4rem);
   font-weight: 660;
   letter-spacing: -0.035em;
-  line-height: 1;
 }
 
-.promptHint {
-  display: block;
-  margin-top: 0.7rem;
-  font-size: 0.85rem;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: var(--text-faint);
+.answer {
+  position: relative;
+  z-index: 1;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.answer[data-verdict='correct'] {
+  color: var(--success);
+}
+
+.answer[data-verdict='wrong'] {
+  color: var(--danger);
+}
+
+.answer[data-verdict='skipped'] {
+  color: var(--warning);
+}
+
+.answerRomaji {
+  font-size: clamp(2.05rem, 9.5vw, 3.5rem);
+  font-weight: 680;
+  letter-spacing: -0.03em;
+}
+
+.answerKana {
+  font-size: clamp(2.6rem, 13vw, 4.4rem);
+}
+
+.answerKanaWide {
+  font-size: clamp(2rem, 9.5vw, 3.4rem);
+}
+
+.caption {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 0.9rem;
+  min-height: 1.3em;
+  font-size: clamp(0.76rem, 2.7vw, 0.86rem);
+  line-height: 1.3;
+  color: var(--text-muted);
   text-align: center;
+  text-wrap: balance;
+}
+
+.verdictWord {
+  font-weight: 680;
+}
+
+.verdictWord[data-verdict='correct'] {
+  color: var(--success);
+}
+
+.verdictWord[data-verdict='wrong'] {
+  color: var(--danger);
+}
+
+.verdictWord[data-verdict='skipped'] {
+  color: var(--warning);
 }
 
 /* ── Typing input ─────────────────────────────────────────────────────────── */
@@ -198,17 +276,23 @@
   box-shadow: var(--ring);
 }
 
-.input[data-state='correct'] {
+.input[data-verdict='correct'] {
   border-color: var(--success);
   background: var(--success-soft);
   color: var(--success);
   box-shadow: none;
 }
 
-.input[data-state='wrong'] {
+.input[data-verdict='wrong'] {
   border-color: var(--danger);
   background: var(--danger-soft);
   color: var(--danger);
+  box-shadow: none;
+}
+
+.input[data-verdict='skipped'] {
+  border-color: var(--warning);
+  background: var(--warning-soft);
   box-shadow: none;
 }
 
@@ -277,83 +361,6 @@
   right: 0.45rem;
 }
 
-/* ── Feedback ─────────────────────────────────────────────────────────────── */
-
-.feedbackSlot {
-  width: 100%;
-  min-height: 5.5rem;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.feedback {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 1rem;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-}
-
-.feedback[data-tone='correct'] {
-  background: var(--success-soft);
-  border-color: var(--success-line);
-  color: var(--success);
-}
-
-.feedback[data-tone='wrong'] {
-  background: var(--danger-soft);
-  border-color: var(--danger-line);
-  color: var(--danger);
-}
-
-.feedbackIcon {
-  display: grid;
-  place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  flex: none;
-  border-radius: 50%;
-  color: #fff;
-}
-
-.feedback[data-tone='correct'] .feedbackIcon {
-  background: var(--success);
-  color: var(--success-ink);
-}
-
-.feedback[data-tone='wrong'] .feedbackIcon {
-  background: var(--danger);
-  color: var(--danger-ink);
-}
-
-.feedbackText {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.35;
-}
-
-.feedbackTitle {
-  font-weight: 680;
-  font-size: 0.98rem;
-}
-
-.feedbackDetail {
-  font-size: 0.86rem;
-  color: var(--text-muted);
-}
-
-.feedbackAnswer {
-  font-weight: 700;
-}
-
-.feedbackGlyph {
-  font-family: var(--font-kana);
-}
-
 /* ── Bottom action ────────────────────────────────────────────────────────── */
 
 .actions {
@@ -362,6 +369,21 @@
   display: flex;
   gap: 0.55rem;
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.skip {
+  margin-inline: auto;
+  padding: 0.6rem 1.15rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.skip:hover {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .hint {

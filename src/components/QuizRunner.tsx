@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import type { Kana } from '../data/hiragana';
 import { isCorrectRomaji, teachableAlternates } from '../lib/romaji';
 import { scheduleRetry, summarize } from '../lib/quiz';
-import type { Answer, Question, Quiz, QuizSummary } from '../lib/quiz';
+import type { Answer, Question, Quiz, QuizSummary, Verdict } from '../lib/quiz';
 import { percent } from '../lib/util';
 import ConfirmDialog from './ConfirmDialog';
 import { ArrowRightIcon, CheckIcon, CrossIcon, FlameIcon, RefreshIcon } from './icons';
@@ -18,7 +18,7 @@ interface QuizRunnerProps {
 }
 
 interface Feedback {
-  correct: boolean;
+  verdict: Verdict;
   given: string;
   /** The character was missed and will come back once more this round. */
   requeued: boolean;
@@ -36,8 +36,11 @@ interface State {
 }
 
 type Action =
-  | { type: 'answer'; given: string; correct: boolean; at: number }
+  | { type: 'answer'; given: string; verdict: Verdict; at: number }
   | { type: 'advance'; quiz: Quiz; at: number };
+
+/** Drives both the prompt sliding aside and the answer sliding out behind it. */
+const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
 
 function init(quiz: Quiz): State {
   const now = Date.now();
@@ -59,12 +62,12 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'answer': {
       if (state.feedback) return state;
-      const requeued = !action.correct && !current.isRetry;
+      const requeued = action.verdict !== 'correct' && !current.isRetry;
       const answer: Answer = {
         kana: current.kana,
         mode: current.mode,
         isRetry: current.isRetry,
-        correct: action.correct,
+        verdict: action.verdict,
         given: action.given,
         elapsedMs: action.at - state.questionStartedAt,
       };
@@ -72,7 +75,7 @@ function reducer(state: State, action: Action): State {
         ...state,
         answers: [...state.answers, answer],
         resolved: state.resolved + (requeued ? 0 : 1),
-        feedback: { correct: action.correct, given: action.given, requeued },
+        feedback: { verdict: action.verdict, given: action.given, requeued },
       };
     }
 
@@ -103,9 +106,11 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
     dispatch({ type: 'advance', quiz, at: Date.now() });
   }, [quiz]);
 
-  const answer = useCallback((given: string, correct: boolean) => {
-    dispatch({ type: 'answer', given, correct, at: Date.now() });
+  const answer = useCallback((given: string, verdict: Verdict) => {
+    dispatch({ type: 'answer', given, verdict, at: Date.now() });
   }, []);
+
+  const skip = useCallback(() => answer('', 'skipped'), [answer]);
 
   // Hand the finished round up exactly once.
   useEffect(() => {
@@ -114,10 +119,11 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
     onFinish(summarize(state.answers, state.endedAt - state.startedAt));
   }, [state.endedAt, state.answers, state.startedAt, onFinish]);
 
-  // A correct answer moves on by itself; a miss waits so the answer can be read.
+  // A correct answer moves on by itself; anything else waits so the reveal can
+  // be read.
   useEffect(() => {
-    if (!feedback?.correct) return;
-    const timer = setTimeout(advance, 720);
+    if (feedback?.verdict !== 'correct') return;
+    const timer = setTimeout(advance, 900);
     return () => clearTimeout(timer);
   }, [feedback, advance]);
 
@@ -140,7 +146,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
         const choice = current.choices[index];
         if (choice) {
           event.preventDefault();
-          answer(choice.kana, choice.romaji === current.kana.romaji);
+          answer(choice.kana, choice.romaji === current.kana.romaji ? 'correct' : 'wrong');
         }
       }
     };
@@ -151,7 +157,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const streak = useMemo(() => {
     let count = 0;
     for (let i = state.answers.length - 1; i >= 0; i--) {
-      if (!state.answers[i].correct) break;
+      if (state.answers[i].verdict !== 'correct') break;
       count += 1;
     }
     return count;
@@ -223,42 +229,47 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
               </span>
             )}
 
+            <QuestionCard question={current} feedback={feedback} />
+
             {current.mode === 'type' ? (
-              <TypeCard question={current} feedback={feedback} onAnswer={answer} onNext={advance} />
+              <TypeAnswer question={current} feedback={feedback} onAnswer={answer} onNext={advance} />
             ) : (
-              <ChooseCard question={current} feedback={feedback} onAnswer={answer} />
+              <ChoiceGrid question={current} feedback={feedback} onAnswer={answer} />
             )}
           </motion.div>
         </AnimatePresence>
 
-        <div className={styles.feedbackSlot} aria-live="polite">
-          <AnimatePresence mode="wait">
-            {feedback && (
-              <FeedbackPanel key={current.key} question={current} feedback={feedback} />
-            )}
+        <div className={styles.actions}>
+          <AnimatePresence mode="wait" initial={false}>
+            {!feedback ? (
+              <motion.button
+                key="skip"
+                className={`btn ${styles.skip}`}
+                onClick={skip}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                I don&rsquo;t know
+              </motion.button>
+            ) : current.mode === 'choose' && feedback.verdict !== 'correct' ? (
+              <motion.button
+                key="continue"
+                className="btn btn--primary btn--block"
+                onClick={advance}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                autoFocus
+              >
+                Continue
+                <ArrowRightIcon size={17} />
+              </motion.button>
+            ) : null}
           </AnimatePresence>
         </div>
-
-        {current.mode === 'choose' && (
-          <div className={styles.actions}>
-            <AnimatePresence>
-              {feedback && !feedback.correct && (
-                <motion.button
-                  className="btn btn--primary btn--block"
-                  onClick={advance}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  autoFocus
-                >
-                  Continue
-                  <ArrowRightIcon size={17} />
-                </motion.button>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
 
         <p className={styles.hint}>
           {current.mode === 'choose'
@@ -281,15 +292,110 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   );
 }
 
-// ── Typing question ─────────────────────────────────────────────────────────
+// ── The card: prompt, and the answer revealed beside it ─────────────────────
 
-interface CardProps {
-  question: Question;
-  feedback: Feedback | null;
-  onAnswer: (given: string, correct: boolean) => void;
+/**
+ * Holds the question and, once answered, the answer itself. The prompt slides
+ * aside to make room and the answer slides out from behind it — the prompt is
+ * painted on an opaque background so the answer really is hidden underneath
+ * until it moves.
+ */
+function QuestionCard({ question, feedback }: { question: Question; feedback: Feedback | null }) {
+  const isType = question.mode === 'type';
+  const { kana } = question;
+  const wide = [...kana.kana].length > 1;
+
+  const promptClass = isType
+    ? `${styles.promptKana} ${wide ? styles.promptKanaWide : ''} kana-glyph`
+    : styles.promptRomaji;
+  const answerClass = isType
+    ? styles.answerRomaji
+    : `${styles.answerKana} ${wide ? styles.answerKanaWide : ''} kana-glyph`;
+
+  return (
+    <div className={styles.glyphWrap} data-verdict={feedback?.verdict}>
+      <div className={styles.revealRow}>
+        <motion.span layout className={`${styles.prompt} ${promptClass}`} transition={REVEAL_SPRING}>
+          {isType ? kana.kana : kana.romaji}
+        </motion.span>
+
+        <AnimatePresence>
+          {feedback && (
+            <motion.span
+              className={`${styles.answer} ${answerClass}`}
+              data-verdict={feedback.verdict}
+              initial={{ x: '-115%', opacity: 0 }}
+              animate={{ x: '0%', opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              transition={REVEAL_SPRING}
+            >
+              {isType ? kana.romaji : kana.kana}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className={styles.caption} aria-live="polite">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p
+            key={feedback ? 'verdict' : 'ask'}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+          >
+            {feedback ? <VerdictCaption question={question} feedback={feedback} /> : !isType && 'Which character is this?'}
+          </motion.p>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
 }
 
-function TypeCard({ question, feedback, onAnswer, onNext }: CardProps & { onNext: () => void }) {
+const VERDICT_WORD: Record<Verdict, string> = {
+  correct: 'Correct',
+  wrong: 'Not quite',
+  skipped: 'Skipped',
+};
+
+function VerdictCaption({ question, feedback }: { question: Question; feedback: Feedback }) {
+  const alternates = teachableAlternates(question.kana);
+
+  const detail: string[] = [];
+  if (feedback.verdict === 'wrong') {
+    detail.push(
+      question.mode === 'type' ? `you typed “${feedback.given}”` : `you picked ${feedback.given}`,
+    );
+  }
+  if (feedback.verdict === 'correct' && alternates.length) {
+    detail.push(`also written ${alternates.join(', ')}`);
+  }
+  if (feedback.requeued) detail.push('comes back at the end');
+
+  return (
+    <>
+      <span className={styles.verdictWord} data-verdict={feedback.verdict}>
+        {VERDICT_WORD[feedback.verdict]}
+      </span>
+      {detail.length > 0 && ` · ${detail.join(' · ')}`}
+    </>
+  );
+}
+
+// ── Typing input ────────────────────────────────────────────────────────────
+
+interface AnswerProps {
+  question: Question;
+  feedback: Feedback | null;
+  onAnswer: (given: string, verdict: Verdict) => void;
+}
+
+function TypeAnswer({
+  question,
+  feedback,
+  onAnswer,
+  onNext,
+}: AnswerProps & { onNext: () => void }) {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -297,180 +403,98 @@ function TypeCard({ question, feedback, onAnswer, onNext }: CardProps & { onNext
     inputRef.current?.focus();
   }, []);
 
-  const state = feedback ? (feedback.correct ? 'correct' : 'wrong') : undefined;
-  const glyphLength = [...question.kana.kana].length;
-
   return (
-    <>
-      <motion.div
-        className={styles.glyphWrap}
-        data-state={state}
-        animate={state ?? 'idle'}
-        variants={{
-          idle: { x: 0 },
-          correct: { scale: [1, 1.035, 1] },
-          wrong: { x: [0, -10, 9, -6, 4, 0] },
-        }}
-        transition={{ duration: 0.42, ease: 'easeInOut' }}
-      >
-        <span
-          className={`${styles.glyph} ${glyphLength > 1 ? styles.glyphDouble : styles.glyphSingle} kana-glyph`}
-        >
-          {question.kana.kana}
-        </span>
-      </motion.div>
-
-      <form
-        className={styles.form}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (feedback || !value.trim()) return;
-          onAnswer(value.trim(), isCorrectRomaji(question.kana, value));
-        }}
-      >
-        <input
-          ref={inputRef}
-          className={styles.input}
-          data-state={state}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          disabled={Boolean(feedback)}
-          placeholder="type the rōmaji"
-          aria-label="Rōmaji reading"
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          enterKeyHint="go"
-        />
-        {feedback ? (
-          <button type="button" className="btn btn--primary" onClick={onNext} autoFocus>
-            Next
-            <ArrowRightIcon size={16} />
-          </button>
-        ) : (
-          <button type="submit" className="btn btn--primary" disabled={!value.trim()}>
-            Check
-          </button>
-        )}
-      </form>
-    </>
+    <form
+      className={styles.form}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (feedback || !value.trim()) return;
+        onAnswer(value.trim(), isCorrectRomaji(question.kana, value) ? 'correct' : 'wrong');
+      }}
+    >
+      <input
+        ref={inputRef}
+        className={styles.input}
+        data-verdict={feedback?.verdict}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        disabled={Boolean(feedback)}
+        placeholder="type the rōmaji"
+        aria-label="Rōmaji reading"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        enterKeyHint="go"
+      />
+      {feedback ? (
+        <button type="button" className="btn btn--primary" onClick={onNext} autoFocus>
+          Next
+          <ArrowRightIcon size={16} />
+        </button>
+      ) : (
+        <button type="submit" className="btn btn--primary" disabled={!value.trim()}>
+          Check
+        </button>
+      )}
+    </form>
   );
 }
 
-// ── Multiple-choice question ────────────────────────────────────────────────
+// ── Multiple choice ─────────────────────────────────────────────────────────
 
-function ChooseCard({ question, feedback, onAnswer }: CardProps) {
+function ChoiceGrid({ question, feedback, onAnswer }: AnswerProps) {
   const [picked, setPicked] = useState<string | null>(null);
 
   const choose = (choice: Kana) => {
     if (feedback) return;
     setPicked(choice.kana);
-    onAnswer(choice.kana, choice.romaji === question.kana.romaji);
+    onAnswer(choice.kana, choice.romaji === question.kana.romaji ? 'correct' : 'wrong');
   };
 
   const stateFor = (choice: Kana): string | undefined => {
     if (!feedback) return undefined;
+    // Green always means "this is the character", whatever the verdict was.
     if (choice.kana === question.kana.kana) return 'correct';
     if (choice.kana === picked) return 'wrong';
     return 'dim';
   };
 
   return (
-    <>
-      <motion.div
-        className={styles.glyphWrap}
-        data-state={feedback ? (feedback.correct ? 'correct' : 'wrong') : undefined}
-        animate={feedback ? (feedback.correct ? 'correct' : 'wrong') : 'idle'}
-        variants={{
-          idle: { x: 0 },
-          correct: { scale: [1, 1.035, 1] },
-          wrong: { x: [0, -10, 9, -6, 4, 0] },
-        }}
-        transition={{ duration: 0.42, ease: 'easeInOut' }}
-      >
-        <div>
-          <span className={styles.promptRomaji}>{question.kana.romaji}</span>
-          <span className={styles.promptHint}>Which character is this?</span>
-        </div>
-      </motion.div>
-
-      <div className={styles.choices}>
-        {question.choices.map((choice, index) => {
-          const choiceState = stateFor(choice);
-          return (
-            <motion.button
-              key={choice.kana}
-              className={`${styles.choice} kana-glyph`}
-              data-state={choiceState}
-              disabled={Boolean(feedback)}
-              onClick={() => choose(choice)}
-              aria-label={`Option ${index + 1}`}
-              whileHover={feedback ? undefined : { y: -3 }}
-              whileTap={feedback ? undefined : { scale: 0.95 }}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: choiceState === 'dim' ? 0.4 : 1, y: 0 }}
-              transition={{ duration: 0.24, delay: 0.03 * index, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <span className={styles.choiceKey} aria-hidden="true">
-                {index + 1}
-              </span>
-              {choice.kana}
-              {choiceState === 'correct' && (
-                <motion.span
-                  className={styles.choiceMark}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 520, damping: 26 }}
-                >
-                  <CheckIcon size={15} />
-                </motion.span>
-              )}
-            </motion.button>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-// ── Feedback ────────────────────────────────────────────────────────────────
-
-function FeedbackPanel({ question, feedback }: { question: Question; feedback: Feedback }) {
-  const { kana } = question;
-  const alternates = teachableAlternates(kana);
-
-  const detail = feedback.correct
-    ? alternates.length
-      ? `also written ${alternates.join(', ')}`
-      : kana.example.word + ' — ' + kana.example.meaning
-    : question.mode === 'type'
-      ? `You typed “${feedback.given}”`
-      : `You picked ${feedback.given}`;
-
-  return (
-    <motion.div
-      className={styles.feedback}
-      data-tone={feedback.correct ? 'correct' : 'wrong'}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -6 }}
-      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <span className={styles.feedbackIcon}>
-        {feedback.correct ? <CheckIcon size={15} /> : <CrossIcon size={15} />}
-      </span>
-      <span className={styles.feedbackText}>
-        <span className={styles.feedbackTitle}>
-          <span className={styles.feedbackGlyph}>{kana.kana}</span>
-          {' — '}
-          <span className={styles.feedbackAnswer}>{kana.romaji}</span>
-        </span>
-        <span className={styles.feedbackDetail}>
-          {detail}
-          {feedback.requeued && ' · comes back at the end'}
-        </span>
-      </span>
-    </motion.div>
+    <div className={styles.choices}>
+      {question.choices.map((choice, index) => {
+        const choiceState = stateFor(choice);
+        return (
+          <motion.button
+            key={choice.kana}
+            className={`${styles.choice} kana-glyph`}
+            data-state={choiceState}
+            disabled={Boolean(feedback)}
+            onClick={() => choose(choice)}
+            aria-label={`Option ${index + 1}`}
+            whileHover={feedback ? undefined : { y: -3 }}
+            whileTap={feedback ? undefined : { scale: 0.95 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: choiceState === 'dim' ? 0.4 : 1, y: 0 }}
+            transition={{ duration: 0.24, delay: 0.03 * index, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <span className={styles.choiceKey} aria-hidden="true">
+              {index + 1}
+            </span>
+            {choice.kana}
+            {choiceState === 'correct' && (
+              <motion.span
+                className={styles.choiceMark}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 520, damping: 26 }}
+              >
+                <CheckIcon size={15} />
+              </motion.span>
+            )}
+          </motion.button>
+        );
+      })}
+    </div>
   );
 }

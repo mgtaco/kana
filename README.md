@@ -46,6 +46,13 @@ Two directions, plus a mode that mixes them:
 Choose which sets to include (basic / dakuten / combos) and how long the round
 is — 10, 20, 40, or everything in the selection, which is the default.
 
+Answering resolves inside the question card itself: the prompt slides aside and
+the answer slides out from behind it, tinted green when you were right and red
+when you weren't. There is also an **I don't know** button — pressing it reveals
+the answer in amber rather than red. A skip counts as a miss for scheduling and
+scoring, but the results screen reports it as skipped rather than as a wrong
+guess.
+
 **Anything you get wrong comes back once.** A missed character goes to the back
 of the queue, so a round works through every character first and then replays
 the misses in the order they happened. That second look is the last one: a
@@ -60,8 +67,8 @@ so the question tests recognition rather than elimination.
 ### Results
 
 Each round ends with first-try accuracy, best streak, total and per-answer
-time, every character you missed alongside what you actually answered, and
-whether you got it right when it came back. From there you can drill just the
+time, every character you missed alongside what you actually answered (or that
+you skipped it), and whether you got it right when it came back. From there you can drill just the
 ones you missed, run another round with the same settings, or change them.
 
 Progress is kept in `localStorage`: per-character accuracy, a mastery level
