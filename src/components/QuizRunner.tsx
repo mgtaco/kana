@@ -468,7 +468,7 @@ function FeedbackPanel({ question, feedback }: { question: Question; feedback: F
         </span>
         <span className={styles.feedbackDetail}>
           {detail}
-          {feedback.requeued && ' · coming back later'}
+          {feedback.requeued && ' · comes back at the end'}
         </span>
       </span>
     </motion.div>

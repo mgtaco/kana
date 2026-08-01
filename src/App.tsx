@@ -18,7 +18,7 @@ import styles from './App.module.css';
 
 export type View = 'home' | 'chart' | 'setup' | 'quiz' | 'results';
 
-const DEFAULT_CONFIG: QuizConfig = { groups: ['basic'], mode: 'type', length: 20 };
+const DEFAULT_CONFIG: QuizConfig = { groups: ['basic'], mode: 'type', length: 'all' };
 
 function sanitizeConfig(config: QuizConfig | null): QuizConfig {
   if (!config || !Array.isArray(config.groups) || config.groups.length === 0) {

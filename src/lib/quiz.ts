@@ -1,6 +1,6 @@
 import type { Kana, KanaGroup } from '../data/hiragana';
 import { kanaForGroups } from '../data/hiragana';
-import { clamp, randomInt, shuffle, uid } from './util';
+import { clamp, shuffle, uid } from './util';
 
 export type QuizMode = 'type' | 'choose' | 'mixed';
 export type QuestionMode = 'type' | 'choose';
@@ -148,16 +148,13 @@ function buildQuiz(selected: Kana[], config: QuizConfig, pool: Kana[]): Quiz {
 }
 
 /**
- * Puts a missed character back into the queue a few cards later — far enough
- * away that the answer isn't still on screen, close enough to still be a
- * review. A character is only ever requeued once; retries are never requeued.
+ * Sends a missed character to the back of the queue, so the round works
+ * through every new character first and only then replays what was missed, in
+ * the order it was missed. A character is only ever requeued once — retries
+ * are never requeued, which is what guarantees the round terminates.
  */
 export function scheduleRetry(queue: Question[], question: Question, quiz: Quiz): Question[] {
-  const retry = makeQuestion(question.kana, quiz.config.mode, quiz.pool, true);
-  const position = clamp(randomInt(2, 5), 0, queue.length);
-  const next = queue.slice();
-  next.splice(position, 0, retry);
-  return next;
+  return [...queue, makeQuestion(question.kana, quiz.config.mode, quiz.pool, true)];
 }
 
 // ── Results ─────────────────────────────────────────────────────────────────

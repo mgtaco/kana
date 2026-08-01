@@ -7,10 +7,6 @@ export function shuffle<T>(items: readonly T[]): T[] {
   return out;
 }
 
-export function randomInt(minInclusive: number, maxInclusive: number): number {
-  return minInclusive + Math.floor(Math.random() * (maxInclusive - minInclusive + 1));
-}
-
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

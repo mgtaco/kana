@@ -65,8 +65,8 @@ export default function QuizSetup({ initial, onStart, onCancel }: QuizSetupProps
       <div className={styles.head}>
         <h1 className={styles.title}>Set up your round</h1>
         <p className={styles.lede}>
-          Anything you get wrong is queued up again later in the same round — once — so you get a
-          second look while it is still fresh.
+          Work through every character once, then anything you got wrong comes back at the end for
+          a second look. Only one — a character is never asked a third time.
         </p>
       </div>
 

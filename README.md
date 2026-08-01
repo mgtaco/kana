@@ -44,12 +44,12 @@ Two directions, plus a mode that mixes them:
 - **Pick the character** — you see a reading and choose from six characters.
 
 Choose which sets to include (basic / dakuten / combos) and how long the round
-is (10, 20, 40, or everything in the selection).
+is — 10, 20, 40, or everything in the selection, which is the default.
 
-**Anything you get wrong comes back once.** A missed character is re-queued two
-to five cards later, far enough that the answer is off screen but close enough
-to still be a review. That second look is the last one: a character is never
-queued a third time, so a round always terminates.
+**Anything you get wrong comes back once.** A missed character goes to the back
+of the queue, so a round works through every character first and then replays
+the misses in the order they happened. That second look is the last one: a
+character is never queued a third time, so a round always terminates.
 
 Answers are graded generously. Kunrei-shiki and wāpuro spellings both count —
 `si` for し, `tu` for つ, `zya` for じゃ, `nn` for ん — and homophone pairs like

@@ -68,7 +68,7 @@ export default function Home({ store, onNavigate, onResetProgress }: HomeProps) 
           </h1>
           <p className={styles.lede}>
             All {KANA.length} characters in one readable chart, plus two drills that train recall in
-            both directions. Anything you miss comes back before the round is over.
+            both directions. Anything you miss comes back at the end of the round.
           </p>
           <div className={styles.actions}>
             <button className="btn btn--primary btn--lg" onClick={() => onNavigate('setup')}>
