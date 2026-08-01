@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import type { Kana } from '../data/hiragana';
+import { NO_BEARINGS, inkBearings } from '../lib/ink';
 import { isCorrectRomaji, teachableAlternates } from '../lib/romaji';
 import { scheduleRetry, summarize } from '../lib/quiz';
 import type { Answer, Question, Quiz, QuizSummary, Verdict } from '../lib/quiz';
@@ -300,10 +302,44 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
  * painted on an opaque background so the answer really is hidden underneath
  * until it moves.
  */
+/**
+ * Trims each element's layout box back to its ink, so that centring the pair
+ * puts equal space either side of what you can actually see. Re-measured when
+ * the question changes, when the viewport resizes (the type scale is in vw)
+ * and once web fonts have loaded.
+ */
+function useInkMargins(
+  promptRef: RefObject<HTMLElement | null>,
+  answerRef: RefObject<HTMLElement | null>,
+  questionKey: string,
+) {
+  const [margins, setMargins] = useState({ prompt: NO_BEARINGS, answer: NO_BEARINGS });
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const prompt = promptRef.current;
+      const answer = answerRef.current;
+      if (!prompt || !answer) return;
+      setMargins({ prompt: inkBearings(prompt), answer: inkBearings(answer) });
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => window.removeEventListener('resize', measure);
+  }, [promptRef, answerRef, questionKey]);
+
+  return margins;
+}
+
 function QuestionCard({ question, feedback }: { question: Question; feedback: Feedback | null }) {
   const isType = question.mode === 'type';
   const { kana } = question;
   const wide = [...kana.kana].length > 1;
+
+  const promptRef = useRef<HTMLSpanElement>(null);
+  const answerRef = useRef<HTMLSpanElement>(null);
+  const margins = useInkMargins(promptRef, answerRef, question.key);
 
   const promptClass = isType
     ? `${styles.promptKana} ${wide ? styles.promptKanaWide : ''} kana-glyph`
@@ -315,24 +351,32 @@ function QuestionCard({ question, feedback }: { question: Question; feedback: Fe
   return (
     <div className={styles.glyphWrap} data-verdict={feedback?.verdict}>
       <div className={styles.revealRow}>
-        <motion.span layout className={`${styles.prompt} ${promptClass}`} transition={REVEAL_SPRING}>
+        <motion.span
+          ref={promptRef}
+          layout
+          className={`${styles.prompt} ${promptClass}`}
+          style={{ marginLeft: -margins.prompt.left, marginRight: -margins.prompt.right }}
+          transition={REVEAL_SPRING}
+        >
           {isType ? kana.kana : kana.romaji}
         </motion.span>
 
-        <AnimatePresence>
-          {feedback && (
-            <motion.span
-              className={`${styles.answer} ${answerClass}`}
-              data-verdict={feedback.verdict}
-              initial={{ x: '-115%', opacity: 0 }}
-              animate={{ x: '0%', opacity: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0.12 } }}
-              transition={REVEAL_SPRING}
-            >
-              {isType ? kana.romaji : kana.kana}
-            </motion.span>
-          )}
-        </AnimatePresence>
+        {/* Always mounted so it can be measured, and so that revealing it is a
+            plain transform rather than a mount — it is simply parked out of
+            flow, invisible, behind the prompt until then. */}
+        <motion.span
+          ref={answerRef}
+          className={`${styles.answer} ${answerClass}`}
+          data-verdict={feedback?.verdict}
+          data-idle={!feedback}
+          aria-hidden={!feedback}
+          style={{ marginLeft: -margins.answer.left, marginRight: -margins.answer.right }}
+          initial={false}
+          animate={feedback ? { x: '0%', opacity: 1 } : { x: '-115%', opacity: 0 }}
+          transition={REVEAL_SPRING}
+        >
+          {isType ? kana.romaji : kana.kana}
+        </motion.span>
       </div>
 
       <div className={styles.caption} aria-live="polite">

@@ -145,12 +145,15 @@
 }
 
 /* Prompt and answer sit side by side; the row stays centred as a pair, so
-   revealing the answer slides the prompt to the left of its own accord. */
+   revealing the answer slides the prompt to the left of its own accord.
+   Negative margins (measured in useInkMargins) trim each box back to its ink,
+   which is what makes this centre on what you can see rather than on boxes —
+   and it means this gap is the real visual gap. */
 .revealRow {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(0.7rem, 3vw, 1.4rem);
+  gap: clamp(1rem, 4.5vw, 1.9rem);
   max-width: 100%;
 }
 
@@ -183,6 +186,13 @@
   z-index: 1;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* Parked out of flow before it is revealed, so the unanswered card centres on
+   the prompt alone while the element stays mounted and measurable. */
+.answer[data-idle='true'] {
+  position: absolute;
+  pointer-events: none;
 }
 
 .answer[data-verdict='correct'] {
