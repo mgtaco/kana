@@ -160,11 +160,23 @@
 .prompt {
   position: relative;
   z-index: 2;
-  /* Opaque, so the answer really is hidden behind it before it slides out. */
-  background: var(--surface);
-  padding-inline: 0.08em;
   line-height: 1;
   text-align: center;
+}
+
+/* The opaque backdrop that hides the answer until it slides out. It is inset
+   to the glyph's own ink (measured in useInkMargins) rather than covering the
+   whole box: the side bearings of a kana are wide enough that a full-width
+   backdrop would paint over the revealed answer and clip it. */
+.prompt::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -0.3em;
+  bottom: -0.3em;
+  left: var(--ink-left, 0px);
+  right: var(--ink-right, 0px);
+  background: var(--surface);
 }
 
 .promptKana {

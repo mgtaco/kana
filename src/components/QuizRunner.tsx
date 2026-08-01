@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
-import type { RefObject } from 'react';
+import type { CSSProperties, RefObject } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import type { Kana } from '../data/hiragana';
@@ -360,7 +360,14 @@ function QuestionCard({ question, feedback }: { question: Question; feedback: Fe
           ref={promptRef}
           layout
           className={`${styles.prompt} ${promptClass}`}
-          style={{ marginLeft: -margins.prompt.left, marginRight: -margins.prompt.right }}
+          style={
+            {
+              marginLeft: -margins.prompt.left,
+              marginRight: -margins.prompt.right,
+              '--ink-left': `${margins.prompt.left}px`,
+              '--ink-right': `${margins.prompt.right}px`,
+            } as CSSProperties
+          }
           transition={REVEAL_SPRING}
         >
           {isType ? kana.kana : kana.romaji}
