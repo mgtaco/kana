@@ -265,20 +265,47 @@
 /* ── Typing input ─────────────────────────────────────────────────────────── */
 
 .form {
+  position: relative;
   display: flex;
+  align-items: stretch;
   gap: 0.55rem;
   width: 100%;
+}
+
+/* Sized to its label rather than to the widest label it could hold, so the
+   input beside it (flex: 1) grows as soon as "I don't know" becomes "Check".
+   The width itself is animated from the component. */
+.action {
+  flex: none;
+  overflow: hidden;
+}
+
+.actionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  white-space: nowrap;
+}
+
+.sizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .input {
   flex: 1;
   min-width: 0;
-  padding: 0.85rem 1.1rem;
+  padding: 0.85rem 1.25rem;
   font-size: 1.15rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   text-align: center;
-  border-radius: var(--radius-md);
+  /* Fully rounded, like the button next to it — at this height that lands on
+     the same curve as the card above. */
+  border-radius: 999px;
   border: 1.5px solid var(--line-strong);
   background: var(--surface);
   transition:
@@ -389,14 +416,15 @@
   width: 100%;
   min-height: 3.1rem;
   display: flex;
+  justify-content: center;
   gap: 0.55rem;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Tone only — the padding stays that of .btn so that the typed answer's button
+   keeps its height when it turns into "Check". */
 .skip {
-  margin-inline: auto;
-  padding: 0.6rem 1.15rem;
-  border: 1px solid var(--line);
+  border-color: var(--line);
   background: var(--surface);
   color: var(--text-faint);
   font-weight: 600;
