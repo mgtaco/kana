@@ -5,6 +5,12 @@
   min-height: 100dvh;
 }
 
+/* Once the lock is on (QuizRunner sets it on mount) the height comes from the
+   visible viewport instead, and the runner has to be free to take it. */
+:global(:root[data-viewport-lock='on']) .runner {
+  min-height: 0;
+}
+
 /* ── Top chrome ───────────────────────────────────────────────────────────── */
 
 .bar {
@@ -76,20 +82,45 @@
 
 /* ── Stage ────────────────────────────────────────────────────────────────── */
 
+/* Everything below the bar, and the only thing a keyboard is allowed to take
+   room from. It is also the round's scroll container: on a short screen the
+   question scrolls within it rather than taking the whole document with it. */
 .stage {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.stageInner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: clamp(0.75rem, 3dvh, 2rem);
+  gap: clamp(0.75rem, calc(var(--viewport-height) * 0.03), 2rem);
   width: 100%;
   max-width: 34rem;
-  margin-inline: auto;
-  padding: clamp(0.75rem, 4dvh, 2.5rem) var(--gutter) 1rem;
+  /* Auto margins rather than justify-content: centre. They centre the same way
+     while there is room to spare, but when there is not — a keyboard open on a
+     small screen — the overflow stays reachable at both ends instead of being
+     clipped past the top of the scroller. */
+  margin: auto;
+  padding: clamp(0.5rem, calc(var(--viewport-height) * 0.04), 2.5rem) var(--gutter) 1rem;
 }
 
 .card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+/* The part of the card that is swapped out per question. The typed answer's
+   field sits outside it, in .card, and so survives the swap. */
+.slide {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -116,8 +147,10 @@
   place-items: center;
   width: 100%;
   overflow: hidden;
-  /* dvh so the card gives way when a mobile keyboard opens. */
-  min-height: clamp(8rem, 28dvh, 15rem);
+  /* Measured against the visible viewport rather than in dvh: dvh counts the
+     room a phone keyboard is standing on, so the card would refuse to give way
+     at exactly the moment it has to. */
+  min-height: clamp(7rem, calc(var(--viewport-height) * 0.28), 15rem);
   /* Bottom padding leaves room for a caption that wraps to two lines. */
   padding: 1.5rem 1rem 3.6rem;
   border-radius: var(--radius-xl);
@@ -179,12 +212,14 @@
   background: var(--surface);
 }
 
+/* Width sets the size, but never past a share of the height that is actually
+   visible — otherwise the glyph alone would fill a keyboard-sized viewport. */
 .promptKana {
-  font-size: clamp(4.5rem, 25vw, 8.5rem);
+  font-size: min(clamp(4.5rem, 25vw, 8.5rem), calc(var(--viewport-height) * 0.2));
 }
 
 .promptKanaWide {
-  font-size: clamp(3.2rem, 17vw, 6rem);
+  font-size: min(clamp(3.2rem, 17vw, 6rem), calc(var(--viewport-height) * 0.15));
 }
 
 .promptRomaji {
@@ -343,10 +378,6 @@
   border-color: var(--warning);
   background: var(--warning-soft);
   box-shadow: none;
-}
-
-.input:disabled {
-  opacity: 1;
 }
 
 /* ── Multiple choice ──────────────────────────────────────────────────────── */

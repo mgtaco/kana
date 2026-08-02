@@ -72,6 +72,14 @@
 
   --page-max: 68rem;
   --gutter: clamp(1rem, 4vw, 2rem);
+
+  /* The visible slice of the page, and where it starts. Only meaningful while
+     a round is running: QuizRunner measures the visual viewport and overwrites
+     both of these in pixels, so that a phone keyboard takes its room out of
+     the layout rather than out of what you can see. Until then, and everywhere
+     else, the visible slice is simply the whole viewport. */
+  --viewport-height: 100dvh;
+  --viewport-offset: 0px;
 }
 
 :root[data-theme='light'] {
@@ -162,6 +170,29 @@ a {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+/* ── Viewport lock ────────────────────────────────────────────────────────
+   Set by QuizRunner for as long as a round is on screen. The document itself
+   is nailed down and the app is handed the visible box instead, so that a
+   phone keyboard cannot scroll the top chrome out of sight: whatever room the
+   keyboard takes comes out of the stage, and the progress bar stays put. */
+
+:root[data-viewport-lock='on'],
+:root[data-viewport-lock='on'] body {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+:root[data-viewport-lock='on'] #root {
+  height: var(--viewport-height);
+  min-height: 0;
+  /* Non-zero only if the browser panned away from the top before the layout
+     above had shrunk to fit; this follows it down so nothing is left cut off. */
+  margin-top: var(--viewport-offset);
+  overflow: hidden;
 }
 
 /* ── Shared primitives ────────────────────────────────────────────────────── */

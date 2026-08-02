@@ -44,6 +44,50 @@ type Action =
 /** Drives both the prompt sliding aside and the answer sliding out behind it. */
 const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
 
+/**
+ * Pins the round to the *visual* viewport — the slice of the page a phone
+ * keyboard leaves visible — for as long as a round is on screen.
+ *
+ * Left to itself, iOS scrolls the whole document up to lift the focused input
+ * clear of the keyboard, and the progress bar goes off the top of the screen
+ * with it: `position: sticky` sticks to the layout viewport, which is exactly
+ * the thing being pushed out of view. So the document is not allowed to scroll
+ * at all here. The app is resized to the visible box instead (index.css reads
+ * these two custom properties), which leaves the bar where it is and lets the
+ * stage underneath give way on its own.
+ */
+function useVisualViewportLock() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const sync = () => {
+      const height = viewport ? viewport.height : window.innerHeight;
+      const offset = viewport ? viewport.offsetTop : 0;
+      root.style.setProperty('--viewport-height', `${Math.round(height)}px`);
+      root.style.setProperty('--viewport-offset', `${Math.round(offset)}px`);
+      // Undo any scrolling the browser managed before we shrank to fit.
+      if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+
+    root.dataset.viewportLock = 'on';
+    sync();
+
+    viewport?.addEventListener('resize', sync);
+    viewport?.addEventListener('scroll', sync);
+    window.addEventListener('orientationchange', sync);
+
+    return () => {
+      viewport?.removeEventListener('resize', sync);
+      viewport?.removeEventListener('scroll', sync);
+      window.removeEventListener('orientationchange', sync);
+      delete root.dataset.viewportLock;
+      root.style.removeProperty('--viewport-height');
+      root.style.removeProperty('--viewport-offset');
+    };
+  }, []);
+}
+
 function init(quiz: Quiz): State {
   const now = Date.now();
   return {
@@ -100,6 +144,8 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const [state, dispatch] = useReducer(reducer, quiz, init);
   const [confirmExit, setConfirmExit] = useState(false);
   const finishedRef = useRef(false);
+
+  useVisualViewportLock();
 
   const current = state.queue[0];
   const { feedback } = state;
@@ -215,25 +261,38 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
       </div>
 
       <div className={styles.stage}>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={current.key}
-            className={styles.card}
-            initial={{ opacity: 0, x: 24, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -24, scale: 0.98 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {current.isRetry && (
-              <span className={styles.retryBadge}>
-                <RefreshIcon size={12} />
-                Second look
-              </span>
-            )}
+        <div className={styles.stageInner}>
+          <div className={styles.card}>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={current.key}
+                className={styles.slide}
+                initial={{ opacity: 0, x: 24, scale: 0.98 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -24, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {current.isRetry && (
+                  <span className={styles.retryBadge}>
+                    <RefreshIcon size={12} />
+                    Second look
+                  </span>
+                )}
 
-            <QuestionCard question={current} feedback={feedback} />
+                <QuestionCard question={current} feedback={feedback} />
 
-            {current.mode === 'type' ? (
+                {current.mode === 'choose' && (
+                  <ChoiceGrid question={current} feedback={feedback} onAnswer={answer} />
+                )}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Deliberately outside the block that swaps per question: a
+                remounted input is a closed keyboard on a phone, and one that
+                cannot be reopened without a tap, since only a real gesture may
+                summon it. Keeping this one element alive for the whole round
+                is what lets you answer straight through. */}
+            {current.mode === 'type' && (
               <TypeAnswer
                 question={current}
                 feedback={feedback}
@@ -241,53 +300,51 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
                 onSkip={skip}
                 onNext={advance}
               />
-            ) : (
-              <ChoiceGrid question={current} feedback={feedback} onAnswer={answer} />
             )}
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Typed questions carry their own skip on the input row, so this is
-            only ever needed for multiple choice. */}
-        {current.mode === 'choose' && (
-          <div className={styles.actions}>
-            <AnimatePresence mode="wait" initial={false}>
-              {!feedback ? (
-                <motion.button
-                  key="skip"
-                  className={`btn ${styles.skip}`}
-                  onClick={skip}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  I don&rsquo;t know
-                </motion.button>
-              ) : feedback.verdict !== 'correct' ? (
-                <motion.button
-                  key="continue"
-                  className="btn btn--primary btn--block"
-                  onClick={advance}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  autoFocus
-                >
-                  Continue
-                  <ArrowRightIcon size={17} />
-                </motion.button>
-              ) : null}
-            </AnimatePresence>
           </div>
-        )}
 
-        <p className={styles.hint}>
-          {current.mode === 'choose'
-            ? 'Press 1–6 to answer · Enter to continue'
-            : 'Enter to check · Enter again to continue'}
-        </p>
+          {/* Typed questions carry their own skip on the input row, so this is
+              only ever needed for multiple choice. */}
+          {current.mode === 'choose' && (
+            <div className={styles.actions}>
+              <AnimatePresence mode="wait" initial={false}>
+                {!feedback ? (
+                  <motion.button
+                    key="skip"
+                    className={`btn ${styles.skip}`}
+                    onClick={skip}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    I don&rsquo;t know
+                  </motion.button>
+                ) : feedback.verdict !== 'correct' ? (
+                  <motion.button
+                    key="continue"
+                    className="btn btn--primary btn--block"
+                    onClick={advance}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    autoFocus
+                  >
+                    Continue
+                    <ArrowRightIcon size={17} />
+                  </motion.button>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          )}
+
+          <p className={styles.hint}>
+            {current.mode === 'choose'
+              ? 'Press 1–6 to answer · Enter to continue'
+              : 'Enter to check · Enter again to continue'}
+          </p>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -497,25 +554,34 @@ function TypeAnswer({
 }: AnswerProps & { onSkip: () => void; onNext: () => void }) {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const sizerRef = useRef<HTMLSpanElement>(null);
 
+  // The field outlives the question it was answering, so clearing it between
+  // questions is on us. Done during render rather than from an effect so that
+  // the next character is never painted holding the last one's answer.
+  const askedRef = useRef(question.key);
+  if (askedRef.current !== question.key) {
+    askedRef.current = question.key;
+    setValue('');
+  }
+
   const typed = value.trim().length > 0;
+  const locked = Boolean(feedback);
   // One button, doing whatever the field asks of it: pass on the character
   // while the field is empty, check what is in it once something is typed,
   // and move the round on once the answer has been shown.
   const action: RowAction = feedback ? 'next' : typed ? 'check' : 'pass';
   const width = useNaturalWidth(sizerRef, action);
 
+  // Only ever on mount: a phone will not reopen its keyboard for a focus()
+  // that no tap asked for, and on desktop the field never loses focus in the
+  // first place, so refocusing per question would buy nothing anywhere.
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  // The input is disabled once answered, so the button takes the focus and
-  // with it Enter and Space.
-  useEffect(() => {
-    if (feedback) buttonRef.current?.focus();
-  }, [feedback]);
+  /** Keeps the keyboard up when a tap lands on the button beside the field. */
+  const keepFocus = () => inputRef.current?.focus();
 
   const label = (
     <>
@@ -531,6 +597,9 @@ function TypeAnswer({
       className={styles.form}
       onSubmit={(event) => {
         event.preventDefault();
+        // Some keyboards drop away on submit; asking for the focus back inside
+        // the same gesture is what keeps this one up.
+        keepFocus();
         if (feedback || !typed) return;
         onAnswer(value.trim(), isCorrectRomaji(question.kana, value) ? 'correct' : 'wrong');
       }}
@@ -540,8 +609,17 @@ function TypeAnswer({
         className={styles.input}
         data-verdict={feedback?.verdict}
         value={value}
-        onChange={(event) => setValue(event.target.value)}
-        disabled={Boolean(feedback)}
+        onChange={(event) => {
+          // Locked while the answer is on show — but by refusing the edit
+          // rather than by `disabled` or `readOnly`, either of which takes a
+          // phone keyboard away the moment an answer is checked.
+          if (locked) {
+            event.target.value = value;
+            return;
+          }
+          setValue(event.target.value);
+        }}
+        aria-readonly={locked}
         placeholder="type the rōmaji"
         aria-label="Rōmaji reading"
         autoComplete="off"
@@ -552,10 +630,13 @@ function TypeAnswer({
       />
 
       <motion.button
-        ref={buttonRef}
         type={action === 'check' ? 'submit' : 'button'}
         className={buttonClass}
-        onClick={action === 'pass' ? onSkip : action === 'next' ? onNext : undefined}
+        onClick={() => {
+          keepFocus();
+          if (action === 'pass') onSkip();
+          else if (action === 'next') onNext();
+        }}
         initial={false}
         animate={width === null ? undefined : { width }}
         transition={{ type: 'spring', stiffness: 420, damping: 38 }}
