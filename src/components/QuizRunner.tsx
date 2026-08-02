@@ -234,44 +234,54 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
             <QuestionCard question={current} feedback={feedback} />
 
             {current.mode === 'type' ? (
-              <TypeAnswer question={current} feedback={feedback} onAnswer={answer} onNext={advance} />
+              <TypeAnswer
+                question={current}
+                feedback={feedback}
+                onAnswer={answer}
+                onSkip={skip}
+                onNext={advance}
+              />
             ) : (
               <ChoiceGrid question={current} feedback={feedback} onAnswer={answer} />
             )}
           </motion.div>
         </AnimatePresence>
 
-        <div className={styles.actions}>
-          <AnimatePresence mode="wait" initial={false}>
-            {!feedback ? (
-              <motion.button
-                key="skip"
-                className={`btn ${styles.skip}`}
-                onClick={skip}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-              >
-                I don&rsquo;t know
-              </motion.button>
-            ) : current.mode === 'choose' && feedback.verdict !== 'correct' ? (
-              <motion.button
-                key="continue"
-                className="btn btn--primary btn--block"
-                onClick={advance}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.18 }}
-                autoFocus
-              >
-                Continue
-                <ArrowRightIcon size={17} />
-              </motion.button>
-            ) : null}
-          </AnimatePresence>
-        </div>
+        {/* Typed questions carry their own skip on the input row, so this is
+            only ever needed for multiple choice. */}
+        {current.mode === 'choose' && (
+          <div className={styles.actions}>
+            <AnimatePresence mode="wait" initial={false}>
+              {!feedback ? (
+                <motion.button
+                  key="skip"
+                  className={`btn ${styles.skip}`}
+                  onClick={skip}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  I don&rsquo;t know
+                </motion.button>
+              ) : feedback.verdict !== 'correct' ? (
+                <motion.button
+                  key="continue"
+                  className="btn btn--primary btn--block"
+                  onClick={advance}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  autoFocus
+                >
+                  Continue
+                  <ArrowRightIcon size={17} />
+                </motion.button>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        )}
 
         <p className={styles.hint}>
           {current.mode === 'choose'
@@ -446,25 +456,82 @@ interface AnswerProps {
   onAnswer: (given: string, verdict: Verdict) => void;
 }
 
+type RowAction = 'pass' | 'check' | 'next';
+
+const ACTION_LABEL: Record<RowAction, string> = {
+  pass: 'I don’t know',
+  check: 'Check',
+  next: 'Next',
+};
+
+/**
+ * The width the action button wants for the label it is currently showing,
+ * measured off an invisible copy of it. Animating the button's real width
+ * rather than a transform is what lets the input — its flex sibling — give
+ * ground and take it back in step with the button.
+ */
+function useNaturalWidth(ref: RefObject<HTMLElement | null>, key: string) {
+  const [width, setWidth] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = ref.current;
+      if (el) setWidth(el.getBoundingClientRect().width);
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => window.removeEventListener('resize', measure);
+  }, [ref, key]);
+
+  return width;
+}
+
 function TypeAnswer({
   question,
   feedback,
   onAnswer,
+  onSkip,
   onNext,
-}: AnswerProps & { onNext: () => void }) {
+}: AnswerProps & { onSkip: () => void; onNext: () => void }) {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const sizerRef = useRef<HTMLSpanElement>(null);
+
+  const typed = value.trim().length > 0;
+  // One button, doing whatever the field asks of it: pass on the character
+  // while the field is empty, check what is in it once something is typed,
+  // and move the round on once the answer has been shown.
+  const action: RowAction = feedback ? 'next' : typed ? 'check' : 'pass';
+  const width = useNaturalWidth(sizerRef, action);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // The input is disabled once answered, so the button takes the focus and
+  // with it Enter and Space.
+  useEffect(() => {
+    if (feedback) buttonRef.current?.focus();
+  }, [feedback]);
+
+  const label = (
+    <>
+      {ACTION_LABEL[action]}
+      {action === 'next' && <ArrowRightIcon size={16} />}
+    </>
+  );
+
+  const buttonClass = `btn ${styles.action} ${action === 'pass' ? styles.skip : 'btn--primary'}`;
 
   return (
     <form
       className={styles.form}
       onSubmit={(event) => {
         event.preventDefault();
-        if (feedback || !value.trim()) return;
+        if (feedback || !typed) return;
         onAnswer(value.trim(), isCorrectRomaji(question.kana, value) ? 'correct' : 'wrong');
       }}
     >
@@ -483,16 +550,35 @@ function TypeAnswer({
         spellCheck={false}
         enterKeyHint="go"
       />
-      {feedback ? (
-        <button type="button" className="btn btn--primary" onClick={onNext} autoFocus>
-          Next
-          <ArrowRightIcon size={16} />
-        </button>
-      ) : (
-        <button type="submit" className="btn btn--primary" disabled={!value.trim()}>
-          Check
-        </button>
-      )}
+
+      <motion.button
+        ref={buttonRef}
+        type={action === 'check' ? 'submit' : 'button'}
+        className={buttonClass}
+        onClick={action === 'pass' ? onSkip : action === 'next' ? onNext : undefined}
+        initial={false}
+        animate={width === null ? undefined : { width }}
+        transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={action}
+            className={styles.actionLabel}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.11 }}
+          >
+            {label}
+          </motion.span>
+        </AnimatePresence>
+      </motion.button>
+
+      {/* Out of flow and out of the accessibility tree: it exists only so the
+          button's natural width can be read before animating to it. */}
+      <span ref={sizerRef} className={`${buttonClass} ${styles.sizer}`} aria-hidden="true">
+        <span className={styles.actionLabel}>{label}</span>
+      </span>
     </form>
   );
 }
