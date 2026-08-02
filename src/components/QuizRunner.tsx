@@ -55,19 +55,54 @@ const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
  * at all here. The app is resized to the visible box instead (index.css reads
  * these two custom properties), which leaves the bar where it is and lets the
  * stage underneath give way on its own.
+ *
+ * The one rule while the keyboard is moving is that nothing inside the stage
+ * may change size. A keyboard slides in over a few hundred milliseconds and
+ * reports its progress the whole way; anything sized against those numbers
+ * reflows on every frame, and the kana takes its ink measurement (a canvas
+ * draw and a pixel scan, see lib/ink) with it every time. So the round keeps
+ * its layout and the stage is simply scrolled — the answer row is held against
+ * the top of the keyboard by a scroll offset, which costs nothing to move.
  */
-function useVisualViewportLock() {
+function useVisualViewportLock(stageRef: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const root = document.documentElement;
     const viewport = window.visualViewport;
+    let lastHeight = -1;
+    let lastOffset = -1;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+
+    /** Holds the answer row against the keyboard rather than behind it. */
+    const pinStage = () => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const overflow = stage.scrollHeight - stage.clientHeight;
+      if (overflow > 0 && stage.contains(document.activeElement)) stage.scrollTop = overflow;
+    };
 
     const sync = () => {
-      const height = viewport ? viewport.height : window.innerHeight;
-      const offset = viewport ? viewport.offsetTop : 0;
-      root.style.setProperty('--viewport-height', `${Math.round(height)}px`);
-      root.style.setProperty('--viewport-offset', `${Math.round(offset)}px`);
+      const height = Math.round(viewport ? viewport.height : window.innerHeight);
+      // Writing the same value back would still cost a style recalculation,
+      // and these events arrive in bursts.
+      if (height !== lastHeight) {
+        lastHeight = height;
+        root.style.setProperty('--viewport-height', `${height}px`);
+      }
+      pinStage();
       // Undo any scrolling the browser managed before we shrank to fit.
       if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+
+      // The offset only ever corrects a browser that panned away from the top
+      // in spite of the lock, and it is applied late on purpose: following it
+      // while the keyboard is still moving would shunt the whole round about.
+      clearTimeout(settle);
+      settle = setTimeout(() => {
+        const offset = Math.round(viewport ? viewport.offsetTop : 0);
+        if (offset === lastOffset) return;
+        lastOffset = offset;
+        root.style.setProperty('--viewport-offset', `${offset}px`);
+        pinStage();
+      }, 250);
     };
 
     root.dataset.viewportLock = 'on';
@@ -78,6 +113,7 @@ function useVisualViewportLock() {
     window.addEventListener('orientationchange', sync);
 
     return () => {
+      clearTimeout(settle);
       viewport?.removeEventListener('resize', sync);
       viewport?.removeEventListener('scroll', sync);
       window.removeEventListener('orientationchange', sync);
@@ -85,7 +121,7 @@ function useVisualViewportLock() {
       root.style.removeProperty('--viewport-height');
       root.style.removeProperty('--viewport-offset');
     };
-  }, []);
+  }, [stageRef]);
 }
 
 function init(quiz: Quiz): State {
@@ -144,8 +180,9 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const [state, dispatch] = useReducer(reducer, quiz, init);
   const [confirmExit, setConfirmExit] = useState(false);
   const finishedRef = useRef(false);
+  const stageRef = useRef<HTMLDivElement>(null);
 
-  useVisualViewportLock();
+  useVisualViewportLock(stageRef);
 
   const current = state.queue[0];
   const { feedback } = state;
@@ -260,7 +297,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
         </div>
       </div>
 
-      <div className={styles.stage}>
+      <div className={styles.stage} ref={stageRef}>
         <div className={styles.stageInner}>
           <div className={styles.card}>
             <AnimatePresence mode="wait" initial={false}>
@@ -387,7 +424,19 @@ function useInkMargins(
       const prompt = promptRef.current;
       const answer = answerRef.current;
       if (!prompt || !answer) return;
-      setMargins({ prompt: inkBearings(prompt), answer: inkBearings(answer) });
+      const next = { prompt: inkBearings(prompt), answer: inkBearings(answer) };
+      // Only when the numbers have really moved. iOS treats a keyboard opening
+      // as a window resize, and re-rendering on one of those — with the prompt
+      // under a layout animation, and the stage scrolling beneath it — sets the
+      // glyph springing about for a measurement that came back unchanged.
+      setMargins((current) =>
+        current.prompt.left === next.prompt.left &&
+        current.prompt.right === next.prompt.right &&
+        current.answer.left === next.answer.left &&
+        current.answer.right === next.answer.right
+          ? current
+          : next,
+      );
     };
 
     measure();

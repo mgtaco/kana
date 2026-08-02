@@ -99,7 +99,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(0.75rem, calc(var(--viewport-height) * 0.03), 2rem);
+  gap: clamp(0.75rem, 3dvh, 2rem);
   width: 100%;
   max-width: 34rem;
   /* Auto margins rather than justify-content: centre. They centre the same way
@@ -107,7 +107,7 @@
      small screen — the overflow stays reachable at both ends instead of being
      clipped past the top of the scroller. */
   margin: auto;
-  padding: clamp(0.5rem, calc(var(--viewport-height) * 0.04), 2.5rem) var(--gutter) 1rem;
+  padding: clamp(0.75rem, 4dvh, 2.5rem) var(--gutter) 1rem;
 }
 
 .card {
@@ -147,10 +147,11 @@
   place-items: center;
   width: 100%;
   overflow: hidden;
-  /* Measured against the visible viewport rather than in dvh: dvh counts the
-     room a phone keyboard is standing on, so the card would refuse to give way
-     at exactly the moment it has to. */
-  min-height: clamp(7rem, calc(var(--viewport-height) * 0.28), 15rem);
+  /* Deliberately not tied to the visible viewport: resizing the card while a
+     keyboard slides in reflows it — and re-measures the glyph's ink — on every
+     frame of that animation. The card keeps its size and the stage scrolls it
+     instead. */
+  min-height: clamp(8rem, 28dvh, 15rem);
   /* Bottom padding leaves room for a caption that wraps to two lines. */
   padding: 1.5rem 1rem 3.6rem;
   border-radius: var(--radius-xl);
@@ -212,14 +213,12 @@
   background: var(--surface);
 }
 
-/* Width sets the size, but never past a share of the height that is actually
-   visible — otherwise the glyph alone would fill a keyboard-sized viewport. */
 .promptKana {
-  font-size: min(clamp(4.5rem, 25vw, 8.5rem), calc(var(--viewport-height) * 0.2));
+  font-size: clamp(4.5rem, 25vw, 8.5rem);
 }
 
 .promptKanaWide {
-  font-size: min(clamp(3.2rem, 17vw, 6rem), calc(var(--viewport-height) * 0.15));
+  font-size: clamp(3.2rem, 17vw, 6rem);
 }
 
 .promptRomaji {
