@@ -185,7 +185,19 @@ a {
   overscroll-behavior: none;
 }
 
+/* Taken out of the flow, so that the round is not part of anything the browser
+   can scroll. In the flow, its height *is* the height of the document, and
+   animating that while Safari is busy lifting the field clear of a rising
+   keyboard leaves the two of them arguing over where the page belongs: Safari
+   pushes the document down the screen and fills the gap above it with the
+   theme colour, taking the progress bar with it. Fixed, the round is pinned to
+   the top of the viewport and the document below it never changes size, so
+   there is nothing left to scroll and nothing to argue about. */
 :root[data-viewport-lock='on'] #root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   height: var(--viewport-height);
   min-height: 0;
   overflow: hidden;
