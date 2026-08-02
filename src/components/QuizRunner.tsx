@@ -52,32 +52,40 @@ const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
  * clear of the keyboard, and the progress bar goes off the top of the screen
  * with it: `position: sticky` sticks to the layout viewport, which is exactly
  * the thing being pushed out of view. So the document is not allowed to scroll
- * at all here. The app is resized to the visible box instead (index.css reads
- * these two custom properties), which leaves the bar where it is and lets the
- * stage underneath give way on its own.
+ * at all here. The app is resized to the visible box instead — index.css reads
+ * the height off this custom property, and animates it — which leaves the bar
+ * where it is and lets the stage underneath give way on its own.
  *
  * The one rule while the keyboard is moving is that nothing inside the stage
- * may change size. A keyboard slides in over a few hundred milliseconds and
- * reports its progress the whole way; anything sized against those numbers
- * reflows on every frame, and the kana takes its ink measurement (a canvas
- * draw and a pixel scan, see lib/ink) with it every time. So the round keeps
- * its layout and the stage is simply scrolled — the answer row is held against
- * the top of the keyboard by a scroll offset, which costs nothing to move.
+ * may change size. Anything sized against a keyboard's height is laid out
+ * again every time that height is reported, and the kana takes its ink
+ * measurement (a canvas draw and a pixel scan, see lib/ink) with it each time.
+ * So the round keeps its layout, and the box around it is what moves.
+ *
+ * Nothing here corrects for the browser panning away from the top of the page
+ * of its own accord, either. Safari does pan on the way in and undoes it once
+ * the round fits, and a correction applied on top only fought it — the whole
+ * screen, progress bar and all, took a step down before Safari slid it back.
  */
 function useVisualViewportLock(stageRef: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const root = document.documentElement;
     const viewport = window.visualViewport;
     let lastHeight = -1;
-    let lastOffset = -1;
     let settle: ReturnType<typeof setTimeout> | undefined;
 
-    /** Holds the answer row against the keyboard rather than behind it. */
-    const pinStage = () => {
+    /**
+     * Brings the answer row out from behind the keyboard, in the rare case
+     * that the round is taller than the room left for it. Left until the box
+     * has finished resizing: measured any earlier it would read a height the
+     * transition is still moving through, and scrolling to a figure that is
+     * already out of date is how the round ends up shifting twice.
+     */
+    const revealAnswerRow = () => {
       const stage = stageRef.current;
-      if (!stage) return;
+      if (!stage || !stage.contains(document.activeElement)) return;
       const overflow = stage.scrollHeight - stage.clientHeight;
-      if (overflow > 0 && stage.contains(document.activeElement)) stage.scrollTop = overflow;
+      if (overflow > stage.scrollTop) stage.scrollTo({ top: overflow, behavior: 'smooth' });
     };
 
     const sync = () => {
@@ -88,21 +96,11 @@ function useVisualViewportLock(stageRef: RefObject<HTMLElement | null>) {
         lastHeight = height;
         root.style.setProperty('--viewport-height', `${height}px`);
       }
-      pinStage();
       // Undo any scrolling the browser managed before we shrank to fit.
       if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
 
-      // The offset only ever corrects a browser that panned away from the top
-      // in spite of the lock, and it is applied late on purpose: following it
-      // while the keyboard is still moving would shunt the whole round about.
       clearTimeout(settle);
-      settle = setTimeout(() => {
-        const offset = Math.round(viewport ? viewport.offsetTop : 0);
-        if (offset === lastOffset) return;
-        lastOffset = offset;
-        root.style.setProperty('--viewport-offset', `${offset}px`);
-        pinStage();
-      }, 250);
+      settle = setTimeout(revealAnswerRow, 320);
     };
 
     root.dataset.viewportLock = 'on';
@@ -119,7 +117,6 @@ function useVisualViewportLock(stageRef: RefObject<HTMLElement | null>) {
       window.removeEventListener('orientationchange', sync);
       delete root.dataset.viewportLock;
       root.style.removeProperty('--viewport-height');
-      root.style.removeProperty('--viewport-offset');
     };
   }, [stageRef]);
 }
