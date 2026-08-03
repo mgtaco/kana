@@ -73,10 +73,11 @@
   --page-max: 68rem;
   --gutter: clamp(1rem, 4vw, 2rem);
 
-  /* How much of the bottom of the screen a phone keyboard is covering. Only
-     ever non-zero while a round is running and the answer field has the focus;
-     QuizRunner measures it and the round lays itself out in what is left. */
-  --keyboard-inset: 0px;
+  /* How far the browser has slid the visible part of the page away from the
+     top of the layout — what a phone does to lift a focused field clear of its
+     keyboard. Anything that means to stay put on screen has to add this back;
+     see the round's top bar. QuizRunner keeps it measured. */
+  --viewport-offset: 0px;
 }
 
 :root[data-theme='light'] {
@@ -167,25 +168,6 @@ a {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-}
-
-/* ── Viewport lock ────────────────────────────────────────────────────────
-   Set by QuizRunner for as long as a round is on screen.
-
-   The round is pinned to the viewport and never changes size, not even when a
-   keyboard opens. That is the whole trick, and it is the opposite of what it
-   looks like it should be: a page whose height moves about under Safari while
-   Safari is trying to lift a field clear of a rising keyboard gets shoved
-   bodily down the screen, progress bar and all, and slid back over the next
-   fifth of a second. Nothing here is animated and nothing here is resized, so
-   there is nothing to shove — the keyboard's room is taken out of the stage
-   instead, from --keyboard-inset. Fixed also means the document behind it has
-   no content of its own, so there is nothing to scroll either. */
-:root[data-viewport-lock='on'] #root {
-  position: fixed;
-  inset: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 
 /* ── Shared primitives ────────────────────────────────────────────────────── */

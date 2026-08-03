@@ -5,18 +5,20 @@
   min-height: 100dvh;
 }
 
-/* Once the lock is on (QuizRunner sets it on mount) the height comes from the
-   visible viewport instead, and the runner has to be free to take it. */
-:global(:root[data-viewport-lock='on']) .runner {
-  min-height: 0;
-}
-
 /* ── Top chrome ───────────────────────────────────────────────────────────── */
 
+/* Sticky holds the bar against the top of the page while the page scrolls,
+   which is most of the job. The transform is the rest of it: a phone lifting a
+   focused field clear of its keyboard slides the *visible* part of the page
+   away from the top of the layout, and sticky knows nothing about that — it
+   would sit dutifully at a top that is now off the screen. Adding the offset
+   back is what keeps the bar where it can be seen, whatever the browser does
+   underneath it. */
 .bar {
   position: sticky;
   top: 0;
   z-index: 30;
+  transform: translateY(var(--viewport-offset));
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -82,23 +84,12 @@
 
 /* ── Stage ────────────────────────────────────────────────────────────────── */
 
-/* Everything below the bar, and the only thing a keyboard is allowed to take
-   room from. It is also the round's scroll container: on a short screen the
-   question scrolls within it rather than taking the whole document with it. */
 .stage {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  /* The keyboard's room, taken out of the one box that can afford to lose it.
-     Because this is padding on the scroller, the round centres in what is left
-     while it fits and, once it does not, the answer row still comes to rest
-     against the top of the keyboard rather than behind it. */
-  padding-bottom: var(--keyboard-inset);
-  transition: padding-bottom var(--dur-base) var(--ease-in-out);
 }
 
 .stageInner {
@@ -109,9 +100,8 @@
   width: 100%;
   max-width: 34rem;
   /* Auto margins rather than justify-content: centre. They centre the same way
-     while there is room to spare, but when there is not — a keyboard open on a
-     small screen — the overflow stays reachable at both ends instead of being
-     clipped past the top of the scroller. */
+     while there is room to spare, and give it up from the top first when there
+     is not, rather than pushing the round off the bottom of the page. */
   margin: auto;
   padding: clamp(0.75rem, 4dvh, 2.5rem) var(--gutter) 1rem;
 }

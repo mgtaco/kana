@@ -45,109 +45,49 @@ type Action =
 const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
 
 /**
- * Roughly what share of a phone screen a keyboard covers, for the one focus
- * that happens before any keyboard has been measured. Only ever a placeholder:
- * the real figure replaces it as soon as the keyboard announces itself, and is
- * then remembered for the rest of the session.
- */
-const KEYBOARD_SHARE = 0.42;
-let knownKeyboardInset = 0;
-
-/**
- * Keeps the round clear of a phone keyboard, and the progress bar on screen.
+ * Keeps the progress bar on screen while a phone keyboard is open.
  *
- * Left alone, iOS lifts a focused field clear of the keyboard by moving the
- * page — and the progress bar goes with it, because `position: sticky` sticks
- * to a layout viewport that is itself being moved. Every attempt to hold the
- * page still or to put it back was worse: what Safari does when the round is
- * not where it wants it is to heave the whole screen down, fill the gap above
- * with the theme colour, and slide it back over the next fifth of a second.
+ * A phone lifts a focused field clear of its keyboard by moving the page, and
+ * the round riding upwards is exactly right — it is the bar going with it that
+ * is not. Everything tried in the way of stopping the page moving made it
+ * worse, because none of it stopped anything: hold the page still and Safari
+ * heaves the whole screen about to make its point, and get out in front of it
+ * by leaving room for the keyboard and the two movements simply add up, which
+ * carries the round clean off the top of the screen.
  *
- * So the round no longer resists, and gives Safari nothing to correct. It is
- * pinned to the viewport at a size that never changes (index.css), and the
- * keyboard's room comes out of the stage instead. The important part is *when*:
- * a keyboard is only announced once it is already on its way, by which time
- * Safari has decided the field is behind it. Reserving the room the moment the
- * field takes the focus — before any of that — means the field is never in the
- * way to begin with, and Safari leaves the page alone.
+ * So the page is left entirely alone here, and the one thing that has to stay
+ * put is told where the screen has gone. Part of that is sticky's job already;
+ * the rest is this, the gap sticky cannot see — between the top of the page's
+ * layout and the top of what is actually visible.
  */
-function useKeyboardInset(stageRef: RefObject<HTMLElement | null>) {
+function useVisualViewportOffset() {
   useEffect(() => {
-    const root = document.documentElement;
     const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const root = document.documentElement;
     let current = -1;
-    let settle: ReturnType<typeof setTimeout> | undefined;
-    let verify: ReturnType<typeof setTimeout> | undefined;
 
-    /**
-     * Brings the answer row out from behind the keyboard, in the rare case
-     * that the round is taller than the room left for it. Left until the
-     * reservation has finished settling: measured any earlier it would read a
-     * figure the transition is still moving through, and scrolling to one that
-     * is already out of date is how the round ends up shifting twice.
-     */
-    const revealAnswerRow = () => {
-      const stage = stageRef.current;
-      if (!stage || !stage.contains(document.activeElement)) return;
-      const overflow = stage.scrollHeight - stage.clientHeight;
-      if (overflow > stage.scrollTop) stage.scrollTo({ top: overflow, behavior: 'smooth' });
+    // No debouncing and no easing: this is not an animation of ours, it is a
+    // reading of where the screen is right now, and the bar is only where it
+    // belongs for as long as the reading is current.
+    const track = () => {
+      const offset = Math.round(viewport.offsetTop);
+      if (offset === current) return;
+      current = offset;
+      root.style.setProperty('--viewport-offset', `${offset}px`);
     };
 
-    const reserve = (px: number) => {
-      const next = Math.max(0, Math.round(px));
-      // Writing the same value back would still cost a style recalculation,
-      // and these events arrive in bursts.
-      if (next === current) return;
-      current = next;
-      root.style.setProperty('--keyboard-inset', `${next}px`);
-      clearTimeout(settle);
-      settle = setTimeout(revealAnswerRow, 320);
-    };
-
-    /** What the keyboard is actually covering, once there is one to measure. */
-    const measure = () => {
-      clearTimeout(verify);
-      const inset = viewport ? window.innerHeight - viewport.height : 0;
-      if (inset > 40) knownKeyboardInset = Math.round(inset);
-      reserve(inset);
-    };
-
-    // Touch only: a mouse means a hardware keyboard and nothing to reserve.
-    const expectKeyboard = () => {
-      if (!window.matchMedia('(pointer: coarse)').matches) return;
-      reserve(knownKeyboardInset || window.innerHeight * KEYBOARD_SHARE);
-      // Nothing has promised a keyboard yet. If none turns up, put the room
-      // back rather than leave the round sitting high for good.
-      clearTimeout(verify);
-      verify = setTimeout(measure, 700);
-    };
-
-    const onInputEvent = (event: Event) => {
-      if (event.target instanceof HTMLInputElement) expectKeyboard();
-    };
-
-    root.dataset.viewportLock = 'on';
-    measure();
-
-    // Both, because neither is enough on its own: the field keeps the focus
-    // from one character to the next, so the tap that summons the keyboard
-    // back is often not a change of focus at all.
-    document.addEventListener('focusin', onInputEvent);
-    document.addEventListener('touchstart', onInputEvent, { passive: true });
-    viewport?.addEventListener('resize', measure);
-    window.addEventListener('orientationchange', measure);
+    track();
+    viewport.addEventListener('resize', track);
+    viewport.addEventListener('scroll', track);
 
     return () => {
-      clearTimeout(settle);
-      clearTimeout(verify);
-      document.removeEventListener('focusin', onInputEvent);
-      document.removeEventListener('touchstart', onInputEvent);
-      viewport?.removeEventListener('resize', measure);
-      window.removeEventListener('orientationchange', measure);
-      delete root.dataset.viewportLock;
-      root.style.removeProperty('--keyboard-inset');
+      viewport.removeEventListener('resize', track);
+      viewport.removeEventListener('scroll', track);
+      root.style.removeProperty('--viewport-offset');
     };
-  }, [stageRef]);
+  }, []);
 }
 
 function init(quiz: Quiz): State {
@@ -206,9 +146,8 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const [state, dispatch] = useReducer(reducer, quiz, init);
   const [confirmExit, setConfirmExit] = useState(false);
   const finishedRef = useRef(false);
-  const stageRef = useRef<HTMLDivElement>(null);
 
-  useKeyboardInset(stageRef);
+  useVisualViewportOffset();
 
   const current = state.queue[0];
   const { feedback } = state;
@@ -323,7 +262,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
         </div>
       </div>
 
-      <div className={styles.stage} ref={stageRef}>
+      <div className={styles.stage}>
         <div className={styles.stageInner}>
           <div className={styles.card}>
             <AnimatePresence mode="wait" initial={false}>
