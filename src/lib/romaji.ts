@@ -4,10 +4,17 @@ import type { Kana } from '../data/hiragana';
  * Fold an answer into the form we compare against: lowercase, no whitespace,
  * no apostrophes (so `n'` and `n` match), and ASCII-folded so a stray full-width
  * character typed with a Japanese IME still counts.
+ *
+ * Macrons are folded away too — ō becomes o — which is what lets a word's long
+ * vowels be written the Hepburn way (`gakkō`) without the reader having to
+ * carry a second alphabet around. Decomposing and dropping the marks in the
+ * Latin combining block leaves kana alone, whose dakuten lives in its own.
  */
 export function normalizeRomaji(input: string): string {
   return input
     .normalize('NFKC')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[\s'’ˈ`-]/g, '')
     .trim();

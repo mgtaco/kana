@@ -3,12 +3,31 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import { CHART_SECTIONS, KANA, getKana } from '../data/hiragana';
 import type { ChartSection, Kana, KanaGroup } from '../data/hiragana';
+import { WORDS, charsRequiredFor } from '../data/words';
+import type { Word } from '../data/words';
 import { MASTERY_LABEL, masteryOf } from '../lib/storage';
 import type { Mastery, Store } from '../lib/storage';
 import { teachableAlternates } from '../lib/romaji';
 import { ArrowLeftIcon, ArrowRightIcon, CrossIcon, TargetIcon } from './icons';
+import Mnemonic from './Mnemonic';
 
 import styles from './Chart.module.css';
+
+/**
+ * Words in the drill pool that use this character, shortest first so the list
+ * reads as "here is where you will meet it" rather than as a dictionary.
+ */
+const WORDS_USING = new Map<string, Word[]>();
+for (const entry of WORDS) {
+  for (const char of new Set(charsRequiredFor(entry.word))) {
+    const list = WORDS_USING.get(char);
+    if (list) list.push(entry);
+    else WORDS_USING.set(char, [entry]);
+  }
+}
+for (const list of WORDS_USING.values()) {
+  list.sort((a, b) => a.tier - b.tier || a.word.length - b.word.length);
+}
 
 interface ChartProps {
   store: Store;
@@ -56,7 +75,7 @@ export default function Chart({ store, onStartQuiz }: ChartProps) {
           <h1 className={styles.title}>The hiragana chart</h1>
           <p className={styles.lede}>
             All {KANA.length} characters, grouped the way they are taught. Tap any character for its
-            reading and an example word.
+            reading, a way to remember the shape, and words that use it.
           </p>
         </div>
 
@@ -250,6 +269,7 @@ function KanaSheet({ kana, store, onClose, onStep }: KanaSheetProps) {
   const index = KANA.findIndex((entry) => entry.kana === kana.kana);
   const previous = KANA[(index - 1 + KANA.length) % KANA.length];
   const next = KANA[(index + 1) % KANA.length];
+  const words = (WORDS_USING.get(kana.kana) ?? []).slice(0, 4);
 
   return (
     <motion.div
@@ -297,12 +317,28 @@ function KanaSheet({ kana, store, onClose, onStep }: KanaSheetProps) {
           </div>
         </div>
 
+        <Mnemonic kana={kana.kana} className={styles.sheetMnemonic} />
+
         <div className={styles.example}>
           <div className={styles.exampleWord}>{kana.example.word}</div>
           <div className={styles.exampleMeta}>
             {kana.example.romaji} — {kana.example.meaning}
           </div>
         </div>
+
+        {words.length > 0 && (
+          <div className={styles.wordList}>
+            <span className={styles.wordListHead}>Words using {kana.kana}</span>
+            {words.map((entry) => (
+              <div key={entry.word} className={styles.wordRow}>
+                <span className={`${styles.wordText} kana-glyph`}>{entry.word}</span>
+                <span className={styles.wordMeta}>
+                  {entry.romaji} — {entry.meaning}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className={styles.sheetNav}>
           <button className={styles.navBtn} onClick={() => onStep(-1)}>
