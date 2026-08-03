@@ -133,6 +133,71 @@
   color: var(--accent-ink);
 }
 
+/* ── One-line toggle (the words drill's "only what I've met") ─────────────── */
+
+.toggleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.toggleRow:hover {
+  border-color: var(--line-strong);
+}
+
+.toggleRow[data-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.toggleRow[data-selected='true'] .tick {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.toggleBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.toggleLabel {
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.toggleHint {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.note {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  max-width: 58ch;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+/* The tick sits on the first line of the label, not centred on the block. */
+.toggleRow .tick {
+  margin-top: 0.2rem;
+}
+
 /* ── Modes ────────────────────────────────────────────────────────────────── */
 
 .modeGrid {

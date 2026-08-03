@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import type { View } from '../App';
 import type { ThemeChoice } from '../lib/useTheme';
-import { GridIcon, MoonIcon, SunIcon, TargetIcon } from './icons';
+import { BookIcon, GridIcon, MoonIcon, SunIcon, TargetIcon } from './icons';
 
 import styles from './Header.module.css';
 
@@ -14,10 +14,17 @@ interface HeaderProps {
 }
 
 const TABS = [
+  {
+    id: 'learn',
+    label: 'Learn',
+    target: 'learn' as View,
+    Icon: BookIcon,
+    matches: ['learn', 'lesson'],
+  },
   { id: 'chart', label: 'Chart', target: 'chart' as View, Icon: GridIcon, matches: ['chart'] },
   {
-    id: 'quiz',
-    label: 'Quiz',
+    id: 'practice',
+    label: 'Practice',
     target: 'setup' as View,
     Icon: TargetIcon,
     matches: ['setup', 'results'],

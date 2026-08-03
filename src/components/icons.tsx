@@ -98,6 +98,26 @@ export const ShuffleIcon = ({ size = 18, className }: IconProps) => (
   </svg>
 );
 
+export const BookIcon = ({ size = 18, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M4 4.5h5.5A2.5 2.5 0 0 1 12 7v13a2 2 0 0 0-2-2H4Z" />
+    <path d="M20 4.5h-5.5A2.5 2.5 0 0 0 12 7v13a2 2 0 0 1 2-2h6Z" />
+  </svg>
+);
+
+export const BoltIcon = ({ size = 18, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12l1-8Z" />
+  </svg>
+);
+
+export const FlagIcon = ({ size = 18, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M5 21V4" />
+    <path d="M5 4.5h11l-1.8 3.5L16 11.5H5Z" />
+  </svg>
+);
+
 export const ClockIcon = ({ size = 18, className }: IconProps) => (
   <svg {...base(size)} className={className}>
     <circle cx="12" cy="12" r="8.5" />

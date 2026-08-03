@@ -1,15 +1,27 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, RefObject } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import type { Kana } from '../data/hiragana';
+import type { Word } from '../data/words';
+import { MNEMONICS } from '../data/mnemonics';
 import { NO_BEARINGS, inkBearings } from '../lib/ink';
+import { isCorrectWordReading } from '../lib/kanaText';
 import { isCorrectRomaji, teachableAlternates } from '../lib/romaji';
-import { scheduleRetry, summarize } from '../lib/quiz';
+import { scheduleRetry, subjectOf, summarize } from '../lib/quiz';
 import type { Answer, Question, Quiz, QuizSummary, Verdict } from '../lib/quiz';
 import { percent } from '../lib/util';
 import ConfirmDialog from './ConfirmDialog';
-import { ArrowRightIcon, CheckIcon, CrossIcon, FlameIcon, RefreshIcon } from './icons';
+import { MnemonicLine } from './Mnemonic';
+import { ArrowRightIcon, CheckIcon, ClockIcon, CrossIcon, FlameIcon, RefreshIcon } from './icons';
 
 import styles from './QuizRunner.module.css';
 
@@ -22,16 +34,18 @@ interface QuizRunnerProps {
 interface Feedback {
   verdict: Verdict;
   given: string;
-  /** The character was missed and will come back once more this round. */
+  /** The subject was missed and will come back once more this round. */
   requeued: boolean;
 }
 
 interface State {
   queue: Question[];
   answers: Answer[];
-  /** Characters that have left the queue for good — drives the progress bar. */
+  /** Subjects that have left the queue for good — drives the progress bar. */
   resolved: number;
   feedback: Feedback | null;
+  /** False in a speed run, where the round is over before a second look. */
+  retries: boolean;
   startedAt: number;
   questionStartedAt: number;
   endedAt: number | null;
@@ -39,7 +53,8 @@ interface State {
 
 type Action =
   | { type: 'answer'; given: string; verdict: Verdict; at: number }
-  | { type: 'advance'; quiz: Quiz; at: number };
+  | { type: 'advance'; quiz: Quiz; at: number }
+  | { type: 'end'; at: number };
 
 /** Drives both the prompt sliding aside and the answer sliding out behind it. */
 const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
@@ -88,6 +103,7 @@ function init(quiz: Quiz): State {
     answers: [],
     resolved: 0,
     feedback: null,
+    retries: !quiz.sprintMs,
     startedAt: now,
     questionStartedAt: now,
     endedAt: null,
@@ -95,15 +111,19 @@ function init(quiz: Quiz): State {
 }
 
 function reducer(state: State, action: Action): State {
+  if (action.type === 'end') {
+    return state.endedAt ? state : { ...state, queue: [], feedback: null, endedAt: action.at };
+  }
+
   const current = state.queue[0];
   if (!current) return state;
 
   switch (action.type) {
     case 'answer': {
       if (state.feedback) return state;
-      const requeued = action.verdict !== 'correct' && !current.isRetry;
+      const requeued = state.retries && action.verdict !== 'correct' && !current.isRetry;
       const answer: Answer = {
-        kana: current.kana,
+        subject: subjectOf(current),
         mode: current.mode,
         isRetry: current.isRetry,
         verdict: action.verdict,
@@ -133,6 +153,21 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+/** Milliseconds left on a speed run's clock, ticking often enough to look live. */
+function useCountdown(startedAt: number, sprintMs: number | undefined, stopped: boolean): number {
+  const [remaining, setRemaining] = useState(sprintMs ?? 0);
+
+  useEffect(() => {
+    if (!sprintMs || stopped) return;
+    const tick = () => setRemaining(Math.max(0, sprintMs - (Date.now() - startedAt)));
+    tick();
+    const timer = setInterval(tick, 100);
+    return () => clearInterval(timer);
+  }, [startedAt, sprintMs, stopped]);
+
+  return remaining;
+}
+
 export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) {
   const [state, dispatch] = useReducer(reducer, quiz, init);
   const [confirmExit, setConfirmExit] = useState(false);
@@ -153,6 +188,14 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
 
   const skip = useCallback(() => answer('', 'skipped'), [answer]);
 
+  const remaining = useCountdown(state.startedAt, quiz.sprintMs, state.endedAt !== null);
+
+  // The clock, not the queue, ends a speed run.
+  useEffect(() => {
+    if (!quiz.sprintMs || state.endedAt || remaining > 0) return;
+    dispatch({ type: 'end', at: Date.now() });
+  }, [quiz.sprintMs, remaining, state.endedAt]);
+
   // Hand the finished round up exactly once.
   useEffect(() => {
     if (!state.endedAt || finishedRef.current) return;
@@ -161,12 +204,13 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   }, [state.endedAt, state.answers, state.startedAt, onFinish]);
 
   // A correct answer moves on by itself; anything else waits so the reveal can
-  // be read.
+  // be read. A sprint hurries both along — there is a clock running.
   useEffect(() => {
-    if (feedback?.verdict !== 'correct') return;
-    const timer = setTimeout(advance, 900);
+    if (!feedback) return;
+    if (feedback.verdict !== 'correct' && !quiz.sprintMs) return;
+    const timer = setTimeout(advance, quiz.sprintMs ? 450 : 900);
     return () => clearTimeout(timer);
-  }, [feedback, advance]);
+  }, [feedback, advance, quiz.sprintMs]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -184,6 +228,14 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
       }
       if (current?.mode === 'choose') {
         const index = Number(event.key) - 1;
+        if (current.kind === 'word') {
+          const choice = current.choices[index];
+          if (choice) {
+            event.preventDefault();
+            answer(choice.meaning, choice.word === current.word.word ? 'correct' : 'wrong');
+          }
+          return;
+        }
         const choice = current.choices[index];
         if (choice) {
           event.preventDefault();
@@ -206,7 +258,10 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
 
   if (!current) return <div className={styles.runner} />;
 
-  const progress = percent(state.resolved, quiz.totalUnique);
+  const sprint = Boolean(quiz.sprintMs);
+  const progress = sprint
+    ? percent(remaining, quiz.sprintMs ?? 1)
+    : percent(state.resolved, quiz.totalUnique);
 
   return (
     <div className={styles.runner}>
@@ -218,16 +273,17 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
         <div
           className={styles.progressTrack}
           role="progressbar"
-          aria-valuenow={state.resolved}
+          aria-valuenow={sprint ? Math.ceil(remaining / 1000) : state.resolved}
           aria-valuemin={0}
-          aria-valuemax={quiz.totalUnique}
-          aria-label="Round progress"
+          aria-valuemax={sprint ? Math.round((quiz.sprintMs ?? 0) / 1000) : quiz.totalUnique}
+          aria-label={sprint ? 'Seconds left' : 'Round progress'}
         >
           <motion.div
             className={styles.progressFill}
+            data-urgent={sprint && remaining <= 10_000}
             initial={false}
             animate={{ width: `${progress}%` }}
-            transition={{ type: 'spring', stiffness: 220, damping: 32 }}
+            transition={sprint ? { duration: 0.12 } : { type: 'spring', stiffness: 220, damping: 32 }}
           />
         </div>
 
@@ -246,10 +302,17 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
               </motion.span>
             )}
           </AnimatePresence>
-          <span>
-            {state.resolved}
-            <span className="muted">/{quiz.totalUnique}</span>
-          </span>
+          {sprint ? (
+            <span className={styles.clock} data-urgent={remaining <= 10_000}>
+              <ClockIcon size={13} />
+              {Math.ceil(remaining / 1000)}s
+            </span>
+          ) : (
+            <span>
+              {state.resolved}
+              <span className="muted">/{quiz.totalUnique}</span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -274,9 +337,12 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
 
                 <QuestionCard question={current} feedback={feedback} />
 
-                {current.mode === 'choose' && (
-                  <ChoiceGrid question={current} feedback={feedback} onAnswer={answer} />
-                )}
+                {current.mode === 'choose' &&
+                  (current.kind === 'word' ? (
+                    <MeaningGrid question={current} feedback={feedback} onAnswer={answer} />
+                  ) : (
+                    <ChoiceGrid question={current} feedback={feedback} onAnswer={answer} />
+                  ))}
               </motion.div>
             </AnimatePresence>
 
@@ -313,7 +379,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
                   >
                     I don&rsquo;t know
                   </motion.button>
-                ) : feedback.verdict !== 'correct' ? (
+                ) : feedback.verdict !== 'correct' && !sprint ? (
                   <motion.button
                     key="continue"
                     className="btn btn--primary btn--block"
@@ -334,7 +400,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
 
           <p className={styles.hint}>
             {current.mode === 'choose'
-              ? 'Press 1–6 to answer · Enter to continue'
+              ? `Press 1–${current.choices.length} to answer · Enter to continue`
               : 'Enter to check · Enter again to continue'}
           </p>
         </div>
@@ -356,12 +422,6 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
 
 // ── The card: prompt, and the answer revealed beside it ─────────────────────
 
-/**
- * Holds the question and, once answered, the answer itself. The prompt slides
- * aside to make room and the answer slides out from behind it — the prompt is
- * painted on an opaque background so the answer really is hidden underneath
- * until it moves.
- */
 /**
  * Trims each element's layout box back to its ink, so that centring the pair
  * puts equal space either side of what you can actually see. Re-measured when
@@ -409,21 +469,58 @@ function useInkMargins(
   return margins;
 }
 
-function QuestionCard({ question, feedback }: { question: Question; feedback: Feedback | null }) {
-  const isType = question.mode === 'type';
+/**
+ * What the card shows on each side of the reveal.
+ *
+ * A character asked by typing shows the glyph and reveals the reading; asked by
+ * choosing it shows the reading and reveals the glyph. A word always shows the
+ * word — but when the question is a meaning, there is nothing to slide out
+ * beside it: an English phrase gliding out from behind a Japanese word reads as
+ * a mistake rather than as an answer, so that card keeps still and puts the
+ * answer in its caption instead.
+ */
+function faces(question: Question) {
+  if (question.kind === 'word') {
+    const wide = [...question.word.word].length > 4;
+    return {
+      prompt: question.word.word,
+      promptClass: `${styles.promptWord} ${wide ? styles.promptWordLong : ''} kana-glyph`,
+      answer: question.word.romaji,
+      answerClass: styles.answerWord,
+      reveals: question.mode === 'type',
+      ask: question.mode === 'choose' ? 'What does this word mean?' : 'Read the whole word.',
+    };
+  }
+
   const { kana } = question;
   const wide = [...kana.kana].length > 1;
+  if (question.mode === 'type') {
+    return {
+      prompt: kana.kana,
+      promptClass: `${styles.promptKana} ${wide ? styles.promptKanaWide : ''} kana-glyph`,
+      answer: kana.romaji,
+      answerClass: styles.answerRomaji,
+      reveals: true,
+      ask: '',
+    };
+  }
+  return {
+    prompt: kana.romaji,
+    promptClass: styles.promptRomaji,
+    answer: kana.kana,
+    answerClass: `${styles.answerKana} ${wide ? styles.answerKanaWide : ''} kana-glyph`,
+    reveals: true,
+    ask: 'Which character is this?',
+  };
+}
+
+function QuestionCard({ question, feedback }: { question: Question; feedback: Feedback | null }) {
+  const face = faces(question);
+  const revealed = Boolean(feedback) && face.reveals;
 
   const promptRef = useRef<HTMLSpanElement>(null);
   const answerRef = useRef<HTMLSpanElement>(null);
   const margins = useInkMargins(promptRef, answerRef, question.key);
-
-  const promptClass = isType
-    ? `${styles.promptKana} ${wide ? styles.promptKanaWide : ''} kana-glyph`
-    : styles.promptRomaji;
-  const answerClass = isType
-    ? styles.answerRomaji
-    : `${styles.answerKana} ${wide ? styles.answerKanaWide : ''} kana-glyph`;
 
   return (
     <div className={styles.glyphWrap} data-verdict={feedback?.verdict}>
@@ -431,7 +528,7 @@ function QuestionCard({ question, feedback }: { question: Question; feedback: Fe
         <motion.span
           ref={promptRef}
           layout
-          className={`${styles.prompt} ${promptClass}`}
+          className={`${styles.prompt} ${face.promptClass}`}
           style={
             {
               marginLeft: -margins.prompt.left,
@@ -442,7 +539,7 @@ function QuestionCard({ question, feedback }: { question: Question; feedback: Fe
           }
           transition={REVEAL_SPRING}
         >
-          {isType ? kana.kana : kana.romaji}
+          {face.prompt}
         </motion.span>
 
         {/* Always mounted so it can be measured, and so that revealing it is a
@@ -450,16 +547,16 @@ function QuestionCard({ question, feedback }: { question: Question; feedback: Fe
             flow, invisible, behind the prompt until then. */}
         <motion.span
           ref={answerRef}
-          className={`${styles.answer} ${answerClass}`}
+          className={`${styles.answer} ${face.answerClass}`}
           data-verdict={feedback?.verdict}
-          data-idle={!feedback}
-          aria-hidden={!feedback}
+          data-idle={!revealed}
+          aria-hidden={!revealed}
           style={{ marginLeft: -margins.answer.left, marginRight: -margins.answer.right }}
           initial={false}
-          animate={feedback ? { x: '0%', opacity: 1 } : { x: '-115%', opacity: 0 }}
+          animate={revealed ? { x: '0%', opacity: 1 } : { x: '-115%', opacity: 0 }}
           transition={REVEAL_SPRING}
         >
-          {isType ? kana.romaji : kana.kana}
+          {face.answer}
         </motion.span>
       </div>
 
@@ -472,7 +569,11 @@ function QuestionCard({ question, feedback }: { question: Question; feedback: Fe
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
           >
-            {feedback ? <VerdictCaption question={question} feedback={feedback} /> : !isType && 'Which character is this?'}
+            {feedback ? (
+              <VerdictCaption question={question} feedback={feedback} />
+            ) : (
+              face.ask
+            )}
           </motion.p>
         </AnimatePresence>
       </div>
@@ -487,18 +588,44 @@ const VERDICT_WORD: Record<Verdict, string> = {
 };
 
 function VerdictCaption({ question, feedback }: { question: Question; feedback: Feedback }) {
-  const alternates = teachableAlternates(question.kana);
-
   const detail: string[] = [];
-  if (feedback.verdict === 'wrong') {
+
+  if (question.kind === 'word') {
+    // The reading slides out beside a typed word, so the caption only has to
+    // add the meaning. On a meaning question nothing slides out at all, and the
+    // caption carries both halves of the answer.
     detail.push(
-      question.mode === 'type' ? `you typed “${feedback.given}”` : `you picked ${feedback.given}`,
+      question.mode === 'choose'
+        ? `${question.word.romaji} — ${question.word.meaning}`
+        : question.word.meaning,
     );
+    if (feedback.verdict === 'wrong') {
+      detail.push(
+        question.mode === 'choose'
+          ? `you picked “${feedback.given}”`
+          : `you typed “${feedback.given}”`,
+      );
+    }
+  } else {
+    const alternates = teachableAlternates(question.kana);
+    if (feedback.verdict === 'wrong') {
+      detail.push(
+        question.mode === 'type' ? `you typed “${feedback.given}”` : `you picked ${feedback.given}`,
+      );
+    }
+    if (feedback.verdict === 'correct' && alternates.length) {
+      detail.push(`also written ${alternates.join(', ')}`);
+    }
   }
-  if (feedback.verdict === 'correct' && alternates.length) {
-    detail.push(`also written ${alternates.join(', ')}`);
-  }
+
   if (feedback.requeued) detail.push('comes back at the end');
+
+  // The hook, offered exactly when it is wanted: after the shape failed to come
+  // back on its own.
+  const mnemonic =
+    question.kind === 'kana' && feedback.verdict !== 'correct'
+      ? MNEMONICS[question.kana.kana]
+      : undefined;
 
   return (
     <>
@@ -506,6 +633,12 @@ function VerdictCaption({ question, feedback }: { question: Question; feedback: 
         {VERDICT_WORD[feedback.verdict]}
       </span>
       {detail.length > 0 && ` · ${detail.join(' · ')}`}
+      {mnemonic && (
+        <>
+          <br />
+          <MnemonicLine hint={mnemonic.hint} className={styles.captionHint} />
+        </>
+      )}
     </>
   );
 }
@@ -548,6 +681,12 @@ function useNaturalWidth(ref: RefObject<HTMLElement | null>, key: string) {
   }, [ref, key]);
 
   return width;
+}
+
+function isCorrectAnswer(question: Question, value: string): boolean {
+  return question.kind === 'word'
+    ? isCorrectWordReading(question.word, value)
+    : isCorrectRomaji(question.kana, value);
 }
 
 function TypeAnswer({
@@ -606,7 +745,7 @@ function TypeAnswer({
         // the same gesture is what keeps this one up.
         keepFocus();
         if (feedback || !typed) return;
-        onAnswer(value.trim(), isCorrectRomaji(question.kana, value) ? 'correct' : 'wrong');
+        onAnswer(value.trim(), isCorrectAnswer(question, value) ? 'correct' : 'wrong');
       }}
     >
       <input
@@ -673,6 +812,7 @@ function TypeAnswer({
 
 function ChoiceGrid({ question, feedback, onAnswer }: AnswerProps) {
   const [picked, setPicked] = useState<string | null>(null);
+  if (question.kind !== 'kana') return null;
 
   const choose = (choice: Kana) => {
     if (feedback) return;
@@ -718,6 +858,62 @@ function ChoiceGrid({ question, feedback, onAnswer }: AnswerProps) {
                 transition={{ type: 'spring', stiffness: 520, damping: 26 }}
               >
                 <CheckIcon size={15} />
+              </motion.span>
+            )}
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The same idea as ChoiceGrid, but the options are meanings and so are text. */
+function MeaningGrid({ question, feedback, onAnswer }: AnswerProps) {
+  const [picked, setPicked] = useState<string | null>(null);
+  if (question.kind !== 'word') return null;
+
+  const choose = (choice: Word) => {
+    if (feedback) return;
+    setPicked(choice.word);
+    onAnswer(choice.meaning, choice.word === question.word.word ? 'correct' : 'wrong');
+  };
+
+  const stateFor = (choice: Word): string | undefined => {
+    if (!feedback) return undefined;
+    if (choice.word === question.word.word) return 'correct';
+    if (choice.word === picked) return 'wrong';
+    return 'dim';
+  };
+
+  return (
+    <div className={styles.meanings}>
+      {question.choices.map((choice, index) => {
+        const choiceState = stateFor(choice);
+        return (
+          <motion.button
+            key={choice.word}
+            className={styles.meaning}
+            data-state={choiceState}
+            disabled={Boolean(feedback)}
+            onClick={() => choose(choice)}
+            whileHover={feedback ? undefined : { y: -2 }}
+            whileTap={feedback ? undefined : { scale: 0.98 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: choiceState === 'dim' ? 0.4 : 1, y: 0 }}
+            transition={{ duration: 0.24, delay: 0.03 * index, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <span className={styles.meaningKey} aria-hidden="true">
+              {index + 1}
+            </span>
+            <span className={styles.meaningText}>{choice.meaning}</span>
+            {choiceState === 'correct' && (
+              <motion.span
+                className={styles.meaningMark}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 520, damping: 26 }}
+              >
+                <CheckIcon size={14} />
               </motion.span>
             )}
           </motion.button>

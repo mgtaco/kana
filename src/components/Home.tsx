@@ -1,20 +1,34 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
 
 import type { View } from '../App';
 import { KANA } from '../data/hiragana';
+import { LESSONS, completedCount, nextLesson } from '../lib/lessons';
+import type { Drill } from '../lib/quiz';
+import { dueCount } from '../lib/review';
 import type { Store } from '../lib/storage';
-import { masteryOf, overallStats } from '../lib/storage';
+import { masteryOf, overallStats, streakDays } from '../lib/storage';
 import type { Mastery } from '../lib/storage';
 import { percent } from '../lib/util';
 import ConfirmDialog from './ConfirmDialog';
-import { ArrowRightIcon, GridIcon, SparkIcon, TargetIcon } from './icons';
+import {
+  ArrowRightIcon,
+  BoltIcon,
+  BookIcon,
+  FlameIcon,
+  GridIcon,
+  RefreshIcon,
+  TargetIcon,
+} from './icons';
 
 import styles from './Home.module.css';
 
 interface HomeProps {
   store: Store;
   onNavigate: (view: View) => void;
+  onOpenLesson: (id: string) => void;
+  onQuickDrill: (drill: Drill) => void;
   onResetProgress: () => void;
 }
 
@@ -39,7 +53,13 @@ const MASTERY_TEXT: Record<Exclude<Mastery, 'new'>, string> = {
   learning: 'Still learning',
 };
 
-export default function Home({ store, onNavigate, onResetProgress }: HomeProps) {
+export default function Home({
+  store,
+  onNavigate,
+  onOpenLesson,
+  onQuickDrill,
+  onResetProgress,
+}: HomeProps) {
   const [confirmReset, setConfirmReset] = useState(false);
 
   const stats = useMemo(() => overallStats(store), [store]);
@@ -56,72 +76,156 @@ export default function Home({ store, onNavigate, onResetProgress }: HomeProps) 
     return counts;
   }, [store]);
 
+  const next = useMemo(() => nextLesson(store), [store]);
+  const due = useMemo(() => dueCount(store), [store]);
+  const streak = useMemo(() => streakDays(store), [store]);
+  const lessonsDone = completedCount(store);
+
+  /**
+   * Which of the two homes to show, read straight off the store rather than out
+   * of a flag of its own — which is also what makes Reset progress hand back the
+   * introduction, exactly as it should.
+   */
+  const returning =
+    store.sessions.length > 0 ||
+    Object.keys(store.lessons).length > 0 ||
+    Object.keys(store.progress).length > 0;
+
   const hasProgress = stats.practised > 0;
 
   return (
     <div className={styles.home}>
-      <section className={styles.hero}>
-        <div className={styles.heroText}>
-          <span className="jp-caption">ひらがな</span>
-          <h1 className={styles.title}>
-            Read <span className={styles.titleAccent}>ひらがな</span> without thinking about it.
-          </h1>
-          <p className={styles.lede}>
-            All {KANA.length} characters in one readable chart, plus two drills that train recall in
-            both directions. Anything you miss comes back at the end of the round.
-          </p>
-          <div className={styles.actions}>
-            <button className="btn btn--primary btn--lg" onClick={() => onNavigate('setup')}>
-              Start a quiz
-              <ArrowRightIcon size={17} />
-            </button>
-            <button className="btn btn--secondary btn--lg" onClick={() => onNavigate('chart')}>
-              <GridIcon size={17} />
-              Browse the chart
-            </button>
-          </div>
-        </div>
+      {returning ? (
+        <>
+          <section className={styles.strip}>
+            <StripStat
+              icon={<FlameIcon size={15} />}
+              value={`${streak}`}
+              label="day streak"
+              tone={streak > 0 ? 'seal' : undefined}
+            />
+            <StripStat icon={<RefreshIcon size={15} />} value={`${due}`} label="due for review" />
+            <StripStat
+              icon={<TargetIcon size={15} />}
+              value={`${stats.mastered}`}
+              label={`of ${KANA.length} mastered`}
+            />
+          </section>
 
-        <div className={styles.art} aria-hidden="true">
-          <div className={styles.artGlow} />
-          <motion.div
-            className={`${styles.tile} ${styles.tileMain} kana-glyph`}
-            initial={{ opacity: 0, scale: 0.85, rotate: -6 }}
-            animate={{ opacity: 1, scale: 1, rotate: -3 }}
-            transition={{ type: 'spring', stiffness: 180, damping: 18, delay: 0.05 }}
-          >
-            あ
-          </motion.div>
-          {FLOATERS.map(({ kana, className, delay }) => (
+          <ContinueCard
+            next={next}
+            lessonsDone={lessonsDone}
+            due={due}
+            onOpenLesson={onOpenLesson}
+            onReview={() => onQuickDrill('review')}
+          />
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h2 className={styles.sectionTitle}>Quick practice</h2>
+            </div>
+            <div className={styles.quickGrid}>
+              <QuickAction
+                icon={<RefreshIcon size={17} />}
+                label="Review"
+                onClick={() => onQuickDrill('review')}
+                disabled={!hasProgress}
+              />
+              <QuickAction
+                icon={<BookIcon size={17} />}
+                label="Words"
+                onClick={() => onQuickDrill('words')}
+              />
+              <QuickAction
+                icon={<BoltIcon size={17} />}
+                label="Speed run"
+                onClick={() => onQuickDrill('speed')}
+              />
+              <QuickAction
+                icon={<GridIcon size={17} />}
+                label="Chart"
+                onClick={() => onNavigate('chart')}
+              />
+              <QuickAction
+                icon={<TargetIcon size={17} />}
+                label="Quiz"
+                onClick={() => onNavigate('setup')}
+              />
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className={styles.hero}>
+          <div className={styles.heroText}>
+            <span className="jp-caption">ひらがな</span>
+            <h1 className={styles.title}>
+              Read <span className={styles.titleAccent}>ひらがな</span> without thinking about it.
+            </h1>
+            <p className={styles.lede}>
+              Twenty short lessons take you through all {KANA.length} characters five at a time,
+              with a hook for every shape and real words to read as soon as you can read them.
+            </p>
+            <div className={styles.actions}>
+              <button
+                className="btn btn--primary btn--lg"
+                onClick={() => onOpenLesson(LESSONS[0].id)}
+              >
+                Start lesson 1 · {LESSONS[0].japanese}
+                <ArrowRightIcon size={17} />
+              </button>
+              <button className="btn btn--secondary btn--lg" onClick={() => onNavigate('chart')}>
+                <GridIcon size={17} />
+                Browse the chart
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.art} aria-hidden="true">
+            <div className={styles.artGlow} />
             <motion.div
-              key={kana}
-              className={`${styles.tile} ${styles.tileSmall} ${className} kana-glyph`}
-              initial={{ opacity: 0, scale: 0.7 }}
-              animate={{ opacity: 1, scale: 1, y: [0, -7, 0] }}
-              transition={{
-                opacity: { duration: 0.4, delay: 0.15 + delay * 0.12 },
-                scale: { type: 'spring', stiffness: 200, damping: 16, delay: 0.15 + delay * 0.12 },
-                y: { duration: 5, repeat: Infinity, ease: 'easeInOut', delay },
-              }}
+              className={`${styles.tile} ${styles.tileMain} kana-glyph`}
+              initial={{ opacity: 0, scale: 0.85, rotate: -6 }}
+              animate={{ opacity: 1, scale: 1, rotate: -3 }}
+              transition={{ type: 'spring', stiffness: 180, damping: 18, delay: 0.05 }}
             >
-              {kana}
+              あ
             </motion.div>
-          ))}
-        </div>
-      </section>
+            {FLOATERS.map(({ kana, className, delay }) => (
+              <motion.div
+                key={kana}
+                className={`${styles.tile} ${styles.tileSmall} ${className} kana-glyph`}
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1, y: [0, -7, 0] }}
+                transition={{
+                  opacity: { duration: 0.4, delay: 0.15 + delay * 0.12 },
+                  scale: {
+                    type: 'spring',
+                    stiffness: 200,
+                    damping: 16,
+                    delay: 0.15 + delay * 0.12,
+                  },
+                  y: { duration: 5, repeat: Infinity, ease: 'easeInOut', delay },
+                }}
+              >
+                {kana}
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {hasProgress && (
         <section className={styles.section}>
           <div className={styles.sectionHead}>
             <h2 className={styles.sectionTitle}>Your progress</h2>
             <span className="muted" style={{ fontSize: '0.85rem' }}>
-              {stats.quizzes} {stats.quizzes === 1 ? 'quiz' : 'quizzes'} completed
+              {stats.quizzes} {stats.quizzes === 1 ? 'round' : 'rounds'} completed
             </span>
           </div>
 
           <div className={styles.statGrid}>
             <StatTile value={`${stats.practised}`} label={`of ${KANA.length} characters seen`} />
-            <StatTile value={`${stats.mastered}`} label="mastered" />
+            <StatTile value={`${lessonsDone}`} label={`of ${LESSONS.length} lessons done`} />
             <StatTile value={`${stats.bestAccuracy}%`} label="best round" />
             <StatTile
               value={`${percent(stats.mastered, KANA.length)}%`}
@@ -170,41 +274,10 @@ export default function Home({ store, onNavigate, onResetProgress }: HomeProps) 
         </section>
       )}
 
-      <section className={styles.section}>
-        <div className={styles.sectionHead}>
-          <h2 className={styles.sectionTitle}>Two ways to drill</h2>
-        </div>
-        <div className={styles.modeGrid}>
-          <button className={`${styles.mode} card`} onClick={() => onNavigate('setup')}>
-            <span className={styles.modeIcon}>
-              <TargetIcon size={18} />
-            </span>
-            <span className={styles.modeTitle}>Recall — type the reading</span>
-            <span className={styles.modeBody}>
-              A character fills the screen and you type its rōmaji. The harder direction, and the
-              one that makes reading stick.
-            </span>
-            <span className={`${styles.modeSample} kana-glyph`}>ふ → fu</span>
-          </button>
-
-          <button className={`${styles.mode} card`} onClick={() => onNavigate('setup')}>
-            <span className={styles.modeIcon}>
-              <SparkIcon size={18} />
-            </span>
-            <span className={styles.modeTitle}>Recognise — pick the character</span>
-            <span className={styles.modeBody}>
-              You see a reading and choose from six characters. Look-alikes are deliberately put
-              side by side.
-            </span>
-            <span className={`${styles.modeSample} kana-glyph`}>nu → ぬ め わ ね れ</span>
-          </button>
-        </div>
-      </section>
-
       <ConfirmDialog
         open={confirmReset}
         title="Reset all progress?"
-        body="Every character's history and all past round results will be cleared. This can't be undone."
+        body="Every character's history, your finished lessons and all past round results will be cleared. This can't be undone."
         confirmLabel="Reset everything"
         tone="danger"
         onConfirm={() => {
@@ -214,6 +287,98 @@ export default function Home({ store, onNavigate, onResetProgress }: HomeProps) 
         onCancel={() => setConfirmReset(false)}
       />
     </div>
+  );
+}
+
+/** The big card: whatever the next thing to do actually is. */
+function ContinueCard({
+  next,
+  lessonsDone,
+  due,
+  onOpenLesson,
+  onReview,
+}: {
+  next: ReturnType<typeof nextLesson>;
+  lessonsDone: number;
+  due: number;
+  onOpenLesson: (id: string) => void;
+  onReview: () => void;
+}) {
+  const finished = next === null;
+
+  return (
+    <motion.button
+      className={`${styles.continue} card`}
+      onClick={() => (finished ? onReview() : onOpenLesson(next.id))}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.995 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <span className={styles.continueIcon}>
+        {finished ? <RefreshIcon size={20} /> : <BookIcon size={20} />}
+      </span>
+      <span className={styles.continueBody}>
+        <span className="eyebrow">
+          {finished ? 'Every lesson done' : lessonsDone === 0 ? 'Start here' : 'Continue'}
+        </span>
+        <span className={styles.continueTitle}>
+          {finished ? 'Review' : `Lesson ${lessonsDone + 1} · ${next.title}`}
+        </span>
+        <span className={styles.continueSub}>
+          {finished
+            ? due > 0
+              ? `${due} characters want another look.`
+              : 'Everything is settled — go again whenever you like.'
+            : next.subtitle}
+        </span>
+      </span>
+      <span className={styles.continueArrow} aria-hidden="true">
+        <ArrowRightIcon size={18} />
+      </span>
+    </motion.button>
+  );
+}
+
+function StripStat({
+  icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: ReactNode;
+  value: string;
+  label: string;
+  tone?: 'seal';
+}) {
+  return (
+    <div className={`${styles.stripItem} card`}>
+      <span className={styles.stripIcon} data-tone={tone}>
+        {icon}
+      </span>
+      <span className={styles.stripValue}>{value}</span>
+      <span className={styles.stripLabel}>{label}</span>
+    </div>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button className={`${styles.quick} card`} onClick={onClick} disabled={disabled}>
+      <span className={styles.quickIcon}>{icon}</span>
+      <span className={styles.quickLabel}>{label}</span>
+    </button>
   );
 }
 

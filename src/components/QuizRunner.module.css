@@ -66,6 +66,12 @@
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+
+/* The last ten seconds of a speed run. */
+.progressFill[data-urgent='true'] {
+  background: var(--seal);
 }
 
 .counter {
@@ -86,6 +92,19 @@
   padding: 0.15rem 0.5rem 0.15rem 0.35rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--seal) 14%, transparent);
+  color: var(--seal);
+}
+
+.clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 3.1rem;
+  justify-content: flex-end;
+  transition: color var(--dur-base) var(--ease-out);
+}
+
+.clock[data-urgent='true'] {
   color: var(--seal);
 }
 
@@ -231,6 +250,17 @@
   letter-spacing: -0.035em;
 }
 
+/* A word is several characters wide, so it is set well below a single glyph —
+   large enough to read the shapes, small enough that しんかんせん still fits a
+   phone without the row wrapping. */
+.promptWord {
+  font-size: clamp(2.1rem, 10vw, 3.4rem);
+}
+
+.promptWordLong {
+  font-size: clamp(1.5rem, 7vw, 2.5rem);
+}
+
 .answer {
   position: relative;
   z-index: 1;
@@ -271,6 +301,12 @@
   font-size: clamp(2rem, 9.5vw, 3.4rem);
 }
 
+.answerWord {
+  font-size: clamp(1.3rem, 6vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
 .caption {
   position: absolute;
   left: 1rem;
@@ -282,6 +318,14 @@
   color: var(--text-muted);
   text-align: center;
   text-wrap: balance;
+}
+
+/* The mnemonic offered after a miss. Set on its own line and a shade quieter
+   than the verdict, so it reads as a hint rather than as part of the score. */
+.captionHint {
+  display: inline-block;
+  margin-top: 0.15rem;
+  color: var(--text-faint);
 }
 
 .verdictWord {
@@ -444,6 +488,79 @@
   right: 0.45rem;
 }
 
+/* ── Meaning choice ───────────────────────────────────────────────────────── */
+
+.meanings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.meaning {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3.4rem;
+  padding: 0.7rem 2rem 0.7rem 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  font-size: 0.95rem;
+  font-weight: 550;
+  line-height: 1.25;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.meaning:not(:disabled):hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.meaning[data-state='correct'] {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.meaning[data-state='wrong'] {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.meaningKey {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+
+/* An English gloss is worth copying out; the surrounding controls are not. */
+.meaningText {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.meaningMark {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+}
+
 /* ── Bottom action ────────────────────────────────────────────────────────── */
 
 .actions {
@@ -491,7 +608,12 @@
     display: none;
   }
 
-  .choiceKey {
+  .choiceKey,
+  .meaningKey {
     display: none;
+  }
+
+  .meaning {
+    padding-left: 1rem;
   }
 }

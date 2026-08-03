@@ -1,33 +1,89 @@
 import type { Kana, KanaGroup } from '../data/hiragana';
 import { kanaForGroups } from '../data/hiragana';
+import type { Word } from '../data/words';
+import { WORDS, wordsReadableWith } from '../data/words';
 import { clamp, shuffle, uid } from './util';
 
 export type QuizMode = 'type' | 'choose' | 'mixed';
 export type QuestionMode = 'type' | 'choose';
 
+/**
+ * What a round is made of. `characters` and `words` differ only in the subject;
+ * `speed` and `review` are both character rounds with a different way of
+ * choosing and pacing them.
+ */
+export type Drill = 'characters' | 'words' | 'speed' | 'review';
+
 export interface QuizConfig {
   groups: KanaGroup[];
   mode: QuizMode;
-  /** Number of distinct characters to ask, or every character in the selection. */
+  /** Number of distinct subjects to ask, or every one in the selection. */
   length: number | 'all';
+  drill: Drill;
+  /** Words drill: restrict the pool to words spelled from characters already met. */
+  wordsKnownOnly?: boolean;
+  /** Speed run: how long the clock runs for. */
+  sprintMs?: number;
 }
 
-export interface Question {
+export interface QuestionBase {
   /** Unique per appearance, so a retry animates in as a fresh card. */
   key: string;
-  kana: Kana;
   mode: QuestionMode;
-  /** Populated for `choose` questions; the correct kana is among them. */
-  choices: Kana[];
-  /** True when this is the second look at a character the learner got wrong. */
+  /** True when this is the second look at a subject the learner got wrong. */
   isRetry: boolean;
+}
+
+export type Question =
+  | (QuestionBase & {
+      kind: 'kana';
+      kana: Kana;
+      /** Populated for `choose` questions; the correct kana is among them. */
+      choices: Kana[];
+    })
+  | (QuestionBase & {
+      kind: 'word';
+      word: Word;
+      choices: Word[];
+    });
+
+/**
+ * What a question is *about*, flattened for display and for progress. Answers
+ * and outcomes carry this rather than the subject itself, so that the parts
+ * downstream of the round — scoring, results, storage — do not each need to
+ * know how to unwrap a character and a word.
+ */
+export interface Subject {
+  kind: 'kana' | 'word';
+  /** The character, or the word. Stable, and the key progress is filed under. */
+  id: string;
+  /** What is shown when the reading is being asked for. */
+  prompt: string;
+  reading: string;
+  /** Words only. */
+  meaning?: string;
+}
+
+export function subjectOf(question: Question): Subject {
+  if (question.kind === 'word') {
+    const { word } = question;
+    return {
+      kind: 'word',
+      id: word.word,
+      prompt: word.word,
+      reading: word.romaji,
+      meaning: word.meaning,
+    };
+  }
+  const { kana } = question;
+  return { kind: 'kana', id: kana.kana, prompt: kana.kana, reading: kana.romaji };
 }
 
 /** `skipped` is a miss the learner owned up to rather than guessed at. */
 export type Verdict = 'correct' | 'wrong' | 'skipped';
 
 export interface Answer {
-  kana: Kana;
+  subject: Subject;
   mode: QuestionMode;
   isRetry: boolean;
   verdict: Verdict;
@@ -37,13 +93,16 @@ export interface Answer {
 }
 
 export const CHOICE_COUNT = 6;
+/** Meanings are read, not glanced at, so a word offers fewer of them. */
+export const WORD_CHOICE_COUNT = 4;
 
 /**
  * Characters that trip learners up because they look alike. Distractors are
  * drawn from these sets first, which makes the multiple-choice quiz test
- * recognition rather than elimination.
+ * recognition rather than elimination. Review reuses the same table to build
+ * head-to-head rounds out of whichever pair is actually causing trouble.
  */
-const CONFUSABLE_SETS: string[][] = [
+export const CONFUSABLE_SETS: string[][] = [
   ['あ', 'お', 'め', 'ぬ'],
   ['ぬ', 'め', 'ね', 'れ', 'わ', 'を'],
   ['さ', 'ち', 'き', 'ら'],
@@ -63,7 +122,7 @@ const DAKUTEN = new Set('がぎぐげござじずぜぞだぢづでどばびぶ�
 const HANDAKUTEN = new Set('ぱぴぷぺぽ');
 
 /** Strips voicing marks and the small ya/yu/yo so がゃ-style kana map to か. */
-function baseChar(kana: string): string {
+export function baseChar(kana: string): string {
   const head = [...kana][0];
   const code = head.codePointAt(0);
   if (code === undefined) return head;
@@ -107,15 +166,51 @@ export function buildChoices(answer: Kana, pool: Kana[], count = CHOICE_COUNT): 
   return shuffle([answer, ...picked]);
 }
 
-export function makeQuestion(
+/**
+ * The same job for a word, where the options are meanings. Words meaning the
+ * same thing are excluded for the same reason as homophones above — あか and
+ * あかい are both "red" — and same-tier words are preferred so the choice is
+ * between four comparable words rather than one obvious one.
+ */
+export function buildWordChoices(
+  answer: Word,
+  pool: Word[],
+  count = WORD_CHOICE_COUNT,
+): Word[] {
+  const candidates = pool.filter(
+    (entry) => entry.word !== answer.word && entry.meaning !== answer.meaning,
+  );
+
+  const picked: Word[] = [];
+  const take = (from: Word[]) => {
+    for (const entry of from) {
+      if (picked.length >= count - 1) break;
+      if (!picked.some((chosen) => chosen.word === entry.word || chosen.meaning === entry.meaning)) {
+        picked.push(entry);
+      }
+    }
+  };
+
+  take(shuffle(candidates.filter((entry) => entry.tier === answer.tier)));
+  take(shuffle(candidates));
+
+  return shuffle([answer, ...picked]);
+}
+
+function resolveMode(mode: QuizMode): QuestionMode {
+  return mode === 'mixed' ? (Math.random() < 0.5 ? 'type' : 'choose') : mode;
+}
+
+export function makeKanaQuestion(
   kana: Kana,
   mode: QuizMode,
   pool: Kana[],
   isRetry = false,
 ): Question {
-  const resolved: QuestionMode = mode === 'mixed' ? (Math.random() < 0.5 ? 'type' : 'choose') : mode;
+  const resolved = resolveMode(mode);
   return {
     key: uid('q'),
+    kind: 'kana',
     kana,
     mode: resolved,
     choices: resolved === 'choose' ? buildChoices(kana, pool) : [],
@@ -123,47 +218,134 @@ export function makeQuestion(
   };
 }
 
+export function makeWordQuestion(
+  word: Word,
+  mode: QuizMode,
+  pool: Word[],
+  isRetry = false,
+): Question {
+  const resolved = resolveMode(mode);
+  return {
+    key: uid('q'),
+    kind: 'word',
+    word,
+    mode: resolved,
+    choices: resolved === 'choose' ? buildWordChoices(word, pool) : [],
+    isRetry,
+  };
+}
+
 export interface Quiz {
   config: QuizConfig;
   pool: Kana[];
+  wordPool: Word[];
   queue: Question[];
   totalUnique: number;
+  /** Set for a speed run: the round ends on the clock rather than on the queue. */
+  sprintMs?: number;
 }
 
 export function createQuiz(config: QuizConfig): Quiz {
   const pool = kanaForGroups(config.groups);
   const wanted = config.length === 'all' ? pool.length : clamp(config.length, 1, pool.length);
-  return buildQuiz(shuffle(pool).slice(0, wanted), config, pool);
+  return createQuizFrom(shuffle(pool).slice(0, wanted), config);
 }
 
-/** A quiz over an explicit set of characters — used by "practise what I missed". */
+/** A quiz over an explicit set of characters — "practise what I missed", lessons, review. */
 export function createQuizFrom(selection: Kana[], config: QuizConfig): Quiz {
-  return buildQuiz(shuffle(selection), config, kanaForGroups(config.groups));
+  const pool = kanaForGroups(config.groups);
+  // A lesson's five characters make hopeless distractors on their own, so the
+  // options are drawn from the whole selected pool, plus the selection itself
+  // in case it reaches outside it.
+  const choicePool = [...new Map([...pool, ...selection].map((k) => [k.kana, k])).values()];
+  const queue = shuffle(selection).map((kana) => makeKanaQuestion(kana, config.mode, choicePool));
+  return { config, pool: choicePool, wordPool: [], queue, totalUnique: queue.length };
 }
 
-function buildQuiz(selected: Kana[], config: QuizConfig, pool: Kana[]): Quiz {
+/**
+ * The word drill. `allowed`, when given, restricts the pool to words spelled
+ * entirely from characters the learner has already met.
+ */
+export function createWordQuiz(config: QuizConfig, allowed?: Set<string>): Quiz {
+  const readable = allowed ? wordsReadableWith(allowed) : WORDS;
+  // Never hand back an empty round: if too little has been met to read
+  // anything yet, fall back to the easiest words in the list.
+  const pool = readable.length >= 4 ? readable : WORDS.filter((entry) => entry.tier === 1);
+  const wanted = config.length === 'all' ? pool.length : clamp(config.length, 1, pool.length);
+  return createWordQuizFrom(shuffle(pool).slice(0, wanted), config, pool);
+}
+
+export function createWordQuizFrom(selection: Word[], config: QuizConfig, pool = WORDS): Quiz {
+  const choicePool = [...new Map([...pool, ...selection].map((e) => [e.word, e])).values()];
+  const queue = shuffle(selection).map((word) => makeWordQuestion(word, config.mode, choicePool));
   return {
     config,
-    pool,
-    queue: selected.map((kana) => makeQuestion(kana, config.mode, pool)),
-    totalUnique: selected.length,
+    pool: kanaForGroups(config.groups),
+    wordPool: choicePool,
+    queue,
+    totalUnique: queue.length,
   };
 }
 
 /**
- * Sends a missed character to the back of the queue, so the round works
- * through every new character first and only then replays what was missed, in
- * the order it was missed. A character is only ever requeued once — retries
- * are never requeued, which is what guarantees the round terminates.
+ * Characters and words in one queue, shuffled together. This is what a lesson's
+ * review phase runs: the point of it is that the characters just learned turn
+ * up inside words rather than only on their own.
+ */
+export function createMixedQuiz(selection: Kana[], words: Word[], config: QuizConfig): Quiz {
+  const pool = kanaForGroups(config.groups);
+  const choicePool = [...new Map([...pool, ...selection].map((k) => [k.kana, k])).values()];
+  const wordPool = words.length ? WORDS : [];
+
+  const queue = shuffle([
+    ...selection.map((kana) => makeKanaQuestion(kana, config.mode, choicePool)),
+    ...words.map((word) => makeWordQuestion(word, config.mode, wordPool)),
+  ]);
+
+  return { config, pool: choicePool, wordPool, queue, totalUnique: queue.length };
+}
+
+/** Roughly how many questions a sprint could get through at one a second. */
+const SPRINT_HEADROOM_MS = 900;
+
+/**
+ * A speed run. The queue is the pool shuffled and then shuffled again on the
+ * end, as many times as the clock could possibly need, because the round is
+ * over when the timer says so and not when the queue runs dry. Nothing is
+ * requeued: a sprint is about the first answer, and a retry mid-sprint would
+ * be a second look nobody asked for.
+ */
+export function createSprintQuiz(config: QuizConfig, selection?: Kana[]): Quiz {
+  const pool = kanaForGroups(config.groups);
+  const source = selection?.length ? selection : pool;
+  const sprintMs = config.sprintMs ?? 60_000;
+
+  const queue: Question[] = [];
+  const needed = Math.ceil(sprintMs / SPRINT_HEADROOM_MS);
+  while (queue.length < needed) {
+    for (const kana of shuffle(source)) queue.push(makeKanaQuestion(kana, config.mode, pool));
+  }
+
+  return { config, pool, wordPool: [], queue, totalUnique: source.length, sprintMs };
+}
+
+/**
+ * Sends a missed subject to the back of the queue, so the round works through
+ * everything new first and only then replays what was missed, in the order it
+ * was missed. A subject is only ever requeued once — retries are never
+ * requeued, which is what guarantees the round terminates.
  */
 export function scheduleRetry(queue: Question[], question: Question, quiz: Quiz): Question[] {
-  return [...queue, makeQuestion(question.kana, quiz.config.mode, quiz.pool, true)];
+  const repeat =
+    question.kind === 'word'
+      ? makeWordQuestion(question.word, quiz.config.mode, quiz.wordPool, true)
+      : makeKanaQuestion(question.kana, quiz.config.mode, quiz.pool, true);
+  return [...queue, repeat];
 }
 
 // ── Results ─────────────────────────────────────────────────────────────────
 
-export interface KanaOutcome {
-  kana: Kana;
+export interface Outcome extends Subject {
   attempts: number;
   firstTryCorrect: boolean;
   /** Missed at first, then answered correctly when it came back around. */
@@ -174,8 +356,8 @@ export interface KanaOutcome {
 }
 
 export interface QuizSummary {
-  outcomes: KanaOutcome[];
-  missed: KanaOutcome[];
+  outcomes: Outcome[];
+  missed: Outcome[];
   totalUnique: number;
   firstTryCorrect: number;
   accuracy: number;
@@ -183,17 +365,17 @@ export interface QuizSummary {
   totalAnswers: number;
   elapsedMs: number;
   avgMs: number;
-  fastest: KanaOutcome | null;
+  fastest: Outcome | null;
 }
 
 export function summarize(answers: Answer[], elapsedMs: number): QuizSummary {
-  const byKana = new Map<string, KanaOutcome>();
+  const byId = new Map<string, Outcome>();
 
   for (const answer of answers) {
-    let outcome = byKana.get(answer.kana.kana);
+    let outcome = byId.get(answer.subject.id);
     if (!outcome) {
       outcome = {
-        kana: answer.kana,
+        ...answer.subject,
         attempts: 0,
         firstTryCorrect: false,
         recovered: false,
@@ -201,7 +383,7 @@ export function summarize(answers: Answer[], elapsedMs: number): QuizSummary {
         skips: 0,
         totalMs: 0,
       };
-      byKana.set(answer.kana.kana, outcome);
+      byId.set(answer.subject.id, outcome);
     }
 
     outcome.attempts += 1;
@@ -216,7 +398,7 @@ export function summarize(answers: Answer[], elapsedMs: number): QuizSummary {
     }
   }
 
-  const outcomes = [...byKana.values()];
+  const outcomes = [...byId.values()];
   const firstTryCorrect = outcomes.filter((outcome) => outcome.firstTryCorrect).length;
 
   let bestStreak = 0;

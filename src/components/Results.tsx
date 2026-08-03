@@ -2,11 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
 
-import type { KanaOutcome, QuizConfig, QuizSummary } from '../lib/quiz';
+import { MNEMONICS } from '../data/mnemonics';
+import type { Outcome, QuizConfig, QuizSummary } from '../lib/quiz';
 import { formatDuration, formatSeconds } from '../lib/util';
 import { CheckIcon, ClockIcon, FlameIcon, RefreshIcon, TargetIcon } from './icons';
+import { MnemonicLine } from './Mnemonic';
 
 import styles from './Results.module.css';
+
+/** What the round was made of, for the copy that has to name it. */
+function subjectNoun(config: QuizConfig, plural: boolean): string {
+  if (config.drill === 'words') return plural ? 'words' : 'word';
+  return plural ? 'characters' : 'character';
+}
 
 interface ResultsProps {
   summary: QuizSummary;
@@ -22,7 +30,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 function headlineFor(accuracy: number, missed: number): { title: string; body: string } {
   if (accuracy === 100) {
-    return { title: 'Flawless round.', body: 'Every character first try. Time to add a new set.' };
+    return { title: 'Flawless round.', body: 'Every one right first try. Time to add a new set.' };
   }
   if (accuracy >= 90) {
     return { title: 'Excellent.', body: `Only ${missed} slipped through — and you saw them again.` };
@@ -119,7 +127,8 @@ export default function Results({
           <h1 className={styles.headline}>{headline.title}</h1>
           <p className={styles.subline}>{headline.body}</p>
           <p className={styles.subline}>
-            {summary.firstTryCorrect} of {summary.totalUnique} characters right first time
+            {summary.firstTryCorrect} of {summary.totalUnique} {subjectNoun(config, true)} right first
+            time
             {summary.totalAnswers > summary.totalUnique &&
               ` · ${summary.totalAnswers - summary.totalUnique} review ${
                 summary.totalAnswers - summary.totalUnique === 1 ? 'card' : 'cards'
@@ -134,7 +143,7 @@ export default function Results({
           index={0}
           icon={<TargetIcon size={15} />}
           value={`${summary.totalUnique}`}
-          label="characters drilled"
+          label={`${subjectNoun(config, true)} drilled`}
         />
         <Stat
           index={1}
@@ -172,12 +181,12 @@ export default function Results({
         {summary.missed.length > 0 ? (
           <div className={styles.missList}>
             {summary.missed.map((outcome, index) => (
-              <MissRow key={outcome.kana.kana} outcome={outcome} index={index} />
+              <MissRow key={outcome.id} outcome={outcome} index={index} />
             ))}
           </div>
         ) : (
           <div className={`${styles.empty} card`}>
-            A clean sweep — every character answered correctly the first time it appeared.
+            A clean sweep — everything answered correctly the first time it appeared.
           </div>
         )}
       </section>
@@ -187,15 +196,17 @@ export default function Results({
           <div className={styles.sectionHead}>
             <h2 className={styles.sectionTitle}>Solid</h2>
             <span className={styles.sectionNote}>
-              {solid.length} {solid.length === 1 ? 'character' : 'characters'} answered first try
+              {solid.length} {subjectNoun(config, solid.length !== 1)} answered first try
             </span>
           </div>
           <div className={styles.solidRow}>
             {solid.map((outcome, index) => (
               <motion.span
-                key={outcome.kana.kana}
-                className={`${styles.solidChip} kana-glyph`}
-                title={outcome.kana.romaji}
+                key={outcome.id}
+                className={`${styles.solidChip} ${
+                  outcome.kind === 'word' ? styles.solidChipWord : ''
+                } kana-glyph`}
+                title={outcome.reading}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{
@@ -204,7 +215,7 @@ export default function Results({
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
-                {outcome.kana.kana}
+                {outcome.prompt}
               </motion.span>
             ))}
           </div>
@@ -264,12 +275,16 @@ function Stat({
   );
 }
 
-function MissRow({ outcome, index }: { outcome: KanaOutcome; index: number }) {
+function MissRow({ outcome, index }: { outcome: Outcome; index: number }) {
   const wrong = outcome.wrongAnswers.filter(Boolean);
   const parts: string[] = [];
   if (outcome.skips > 0) parts.push(outcome.skips > 1 ? 'skipped twice' : 'skipped');
-  if (wrong.length > 0) parts.push(`you said ${wrong.map((w) => `“${w}”`).join(', ')}`);
-  const detail = parts.join(' · ');
+  if (wrong.length > 0) parts.push(`you said ${wrong.map((w) => `\u201c${w}\u201d`).join(', ')}`);
+  const detail = parts.join(' \u00b7 ');
+
+  // Missing a character is exactly when its hook is worth having, so the row
+  // that reports the miss carries it.
+  const mnemonic = outcome.kind === 'kana' ? MNEMONICS[outcome.id] : undefined;
 
   return (
     <motion.div
@@ -280,14 +295,22 @@ function MissRow({ outcome, index }: { outcome: KanaOutcome; index: number }) {
     >
       <span
         className={`${styles.missGlyph} ${
-          [...outcome.kana.kana].length > 1 ? styles.missGlyphWide : ''
+          outcome.kind === 'word'
+            ? styles.missGlyphWord
+            : [...outcome.prompt].length > 1
+              ? styles.missGlyphWide
+              : ''
         } kana-glyph`}
       >
-        {outcome.kana.kana}
+        {outcome.prompt}
       </span>
       <span className={styles.missBody}>
-        <span className={styles.missRomaji}>{outcome.kana.romaji}</span>
+        <span className={styles.missRomaji}>{outcome.reading}</span>
+        {outcome.meaning && <span className={styles.missDetail}>{outcome.meaning}</span>}
         {detail && <span className={styles.missDetail}>{detail}</span>}
+        {mnemonic && (
+          <MnemonicLine hint={mnemonic.hint} className={styles.missHint} />
+        )}
       </span>
       <span
         className={`${styles.missTag} ${
