@@ -44,64 +44,6 @@ type Action =
 /** Drives both the prompt sliding aside and the answer sliding out behind it. */
 const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
 
-/**
- * Measures what a phone keyboard has done to the screen, so the round can lay
- * itself out around it instead of being shoved about by it.
- *
- * A phone does not merely lift a focused field clear of its keyboard: it slides
- * the page until the field sits where the browser would like it, near the
- * middle of what is left. That is a good deal more travel than clearing the
- * keyboard takes, and it carries the card up out of sight. It also cannot be
- * prevented — nailing the page down only makes the browser heave harder, and
- * leaving room for the keyboard ahead of time just adds one movement to the
- * other.
- *
- * So both readings are taken and the round uses them itself: it adds the offset
- * back, which undoes the slide and leaves it sitting still (QuizRunner.module
- * .css, .runner), and it gives up the inset from the bottom of the stage, which
- * is the room the keyboard actually needs. What the browser does no longer
- * decides anything; it is only measured.
- */
-function useKeyboardMetrics() {
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-
-    const root = document.documentElement;
-    let lastOffset = -1;
-    let lastInset = -1;
-
-    // No debouncing and no easing on the offset: it is not an animation of
-    // ours but a reading of where the screen is right now, and undoing a slide
-    // only works while the reading is current.
-    const track = () => {
-      const offset = Math.round(viewport.offsetTop);
-      if (offset !== lastOffset) {
-        lastOffset = offset;
-        root.style.setProperty('--viewport-offset', `${offset}px`);
-      }
-      // Everything the keyboard covers, measured against the layout, which a
-      // keyboard does not resize — only what you can see of it.
-      const inset = Math.max(0, Math.round(window.innerHeight - viewport.height));
-      if (inset !== lastInset) {
-        lastInset = inset;
-        root.style.setProperty('--keyboard-inset', `${inset}px`);
-      }
-    };
-
-    track();
-    viewport.addEventListener('resize', track);
-    viewport.addEventListener('scroll', track);
-
-    return () => {
-      viewport.removeEventListener('resize', track);
-      viewport.removeEventListener('scroll', track);
-      root.style.removeProperty('--viewport-offset');
-      root.style.removeProperty('--keyboard-inset');
-    };
-  }, []);
-}
-
 function init(quiz: Quiz): State {
   const now = Date.now();
   return {
@@ -158,8 +100,6 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const [state, dispatch] = useReducer(reducer, quiz, init);
   const [confirmExit, setConfirmExit] = useState(false);
   const finishedRef = useRef(false);
-
-  useKeyboardMetrics();
 
   const current = state.queue[0];
   const { feedback } = state;

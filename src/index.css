@@ -72,15 +72,6 @@
 
   --page-max: 68rem;
   --gutter: clamp(1rem, 4vw, 2rem);
-
-  /* Two readings of what a phone keyboard has done, both kept by QuizRunner
-     and both only ever non-zero during a round. The offset is how far the
-     browser has slid the visible part of the page away from the top of the
-     layout, which anything meaning to stay put on screen has to add back. The
-     inset is how much of the bottom of the screen the keyboard is covering,
-     which is room the round has to lay itself out without. */
-  --viewport-offset: 0px;
-  --keyboard-inset: 0px;
 }
 
 :root[data-theme='light'] {

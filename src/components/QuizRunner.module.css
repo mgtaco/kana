@@ -1,17 +1,8 @@
-/* Held against the visible screen, whatever the browser does with the page.
-   A phone opening a keyboard does not merely lift the field clear of it — it
-   puts the field where *it* would like it, near the middle of what is left,
-   which is far more travel than clearing the keyboard needs and takes the card
-   up behind the bar with it. That movement cannot be prevented, so it is
-   undone: the offset is exactly how far the page was slid, and adding it back
-   leaves the round sitting still. What room the keyboard really needs is then
-   the stage's business, below, where it can be worked out rather than guessed. */
 .runner {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  transform: translateY(var(--viewport-offset));
 }
 
 /* ── Top chrome ───────────────────────────────────────────────────────────── */
@@ -85,18 +76,12 @@
 
 /* ── Stage ────────────────────────────────────────────────────────────────── */
 
-/* Now that the round no longer moves with the page, the room a keyboard needs
-   has to be given to it here. Taken off the bottom of the stage, so the round
-   goes on centring itself — in what the keyboard has left rather than in the
-   whole screen. */
 .stage {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding-bottom: var(--keyboard-inset);
-  transition: padding-bottom var(--dur-base) var(--ease-in-out);
 }
 
 .stageInner {
@@ -108,7 +93,8 @@
   max-width: 34rem;
   /* Auto margins rather than justify-content: centre. They centre the same way
      while there is room to spare, and give it up from the top first when there
-     is not, rather than pushing the round off the bottom of the page. */
+     is not, rather than pushing the round off the bottom of the page. Touch
+     screens turn the vertical half of this off — see the foot of the file. */
   margin: auto;
   padding: clamp(0.75rem, 4dvh, 2.5rem) var(--gutter) 1rem;
 }
@@ -476,6 +462,16 @@
 }
 
 @media (pointer: coarse) {
+  /* The round sits at the top and stays there. The room below is the
+     keyboard's, open or not — which is what makes a phone bearable here: the
+     field is never in the keyboard's way, so the browser never has cause to go
+     hunting for it, and nothing is ever scrolled, slid or animated out from
+     under you. The empty space when the keyboard is down is the price, and a
+     fair one. A mouse gets the centred layout, where none of this applies. */
+  .stageInner {
+    margin-block: 0;
+  }
+
   .hint {
     display: none;
   }
