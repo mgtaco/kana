@@ -93,6 +93,12 @@
   width: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* The keyboard's room, taken out of the one box that can afford to lose it.
+     Because this is padding on the scroller, the round centres in what is left
+     while it fits and, once it does not, the answer row still comes to rest
+     against the top of the keyboard rather than behind it. */
+  padding-bottom: var(--keyboard-inset);
+  transition: padding-bottom var(--dur-base) var(--ease-in-out);
 }
 
 .stageInner {

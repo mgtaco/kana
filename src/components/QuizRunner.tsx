@@ -45,41 +45,46 @@ type Action =
 const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
 
 /**
- * Pins the round to the *visual* viewport — the slice of the page a phone
- * keyboard leaves visible — for as long as a round is on screen.
- *
- * Left to itself, iOS scrolls the whole document up to lift the focused input
- * clear of the keyboard, and the progress bar goes off the top of the screen
- * with it: `position: sticky` sticks to the layout viewport, which is exactly
- * the thing being pushed out of view. So the document is not allowed to scroll
- * at all here. The app is resized to the visible box instead — index.css reads
- * the height off this custom property, and animates it — which leaves the bar
- * where it is and lets the stage underneath give way on its own.
- *
- * The one rule while the keyboard is moving is that nothing inside the stage
- * may change size. Anything sized against a keyboard's height is laid out
- * again every time that height is reported, and the kana takes its ink
- * measurement (a canvas draw and a pixel scan, see lib/ink) with it each time.
- * So the round keeps its layout, and the box around it is what moves.
- *
- * Nothing here corrects for the browser panning away from the top of the page
- * of its own accord, either. Safari does pan on the way in and undoes it once
- * the round fits, and a correction applied on top only fought it — the whole
- * screen, progress bar and all, took a step down before Safari slid it back.
+ * Roughly what share of a phone screen a keyboard covers, for the one focus
+ * that happens before any keyboard has been measured. Only ever a placeholder:
+ * the real figure replaces it as soon as the keyboard announces itself, and is
+ * then remembered for the rest of the session.
  */
-function useVisualViewportLock(stageRef: RefObject<HTMLElement | null>) {
+const KEYBOARD_SHARE = 0.42;
+let knownKeyboardInset = 0;
+
+/**
+ * Keeps the round clear of a phone keyboard, and the progress bar on screen.
+ *
+ * Left alone, iOS lifts a focused field clear of the keyboard by moving the
+ * page — and the progress bar goes with it, because `position: sticky` sticks
+ * to a layout viewport that is itself being moved. Every attempt to hold the
+ * page still or to put it back was worse: what Safari does when the round is
+ * not where it wants it is to heave the whole screen down, fill the gap above
+ * with the theme colour, and slide it back over the next fifth of a second.
+ *
+ * So the round no longer resists, and gives Safari nothing to correct. It is
+ * pinned to the viewport at a size that never changes (index.css), and the
+ * keyboard's room comes out of the stage instead. The important part is *when*:
+ * a keyboard is only announced once it is already on its way, by which time
+ * Safari has decided the field is behind it. Reserving the room the moment the
+ * field takes the focus — before any of that — means the field is never in the
+ * way to begin with, and Safari leaves the page alone.
+ */
+function useKeyboardInset(stageRef: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const root = document.documentElement;
     const viewport = window.visualViewport;
-    let lastHeight = -1;
+    let current = -1;
     let settle: ReturnType<typeof setTimeout> | undefined;
+    let verify: ReturnType<typeof setTimeout> | undefined;
 
     /**
      * Brings the answer row out from behind the keyboard, in the rare case
-     * that the round is taller than the room left for it. Left until the box
-     * has finished resizing: measured any earlier it would read a height the
-     * transition is still moving through, and scrolling to a figure that is
-     * already out of date is how the round ends up shifting twice.
+     * that the round is taller than the room left for it. Left until the
+     * reservation has finished settling: measured any earlier it would read a
+     * figure the transition is still moving through, and scrolling to one that
+     * is already out of date is how the round ends up shifting twice.
      */
     const revealAnswerRow = () => {
       const stage = stageRef.current;
@@ -88,35 +93,59 @@ function useVisualViewportLock(stageRef: RefObject<HTMLElement | null>) {
       if (overflow > stage.scrollTop) stage.scrollTo({ top: overflow, behavior: 'smooth' });
     };
 
-    const sync = () => {
-      const height = Math.round(viewport ? viewport.height : window.innerHeight);
+    const reserve = (px: number) => {
+      const next = Math.max(0, Math.round(px));
       // Writing the same value back would still cost a style recalculation,
       // and these events arrive in bursts.
-      if (height !== lastHeight) {
-        lastHeight = height;
-        root.style.setProperty('--viewport-height', `${height}px`);
-      }
-      // Undo any scrolling the browser managed before we shrank to fit.
-      if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
-
+      if (next === current) return;
+      current = next;
+      root.style.setProperty('--keyboard-inset', `${next}px`);
       clearTimeout(settle);
       settle = setTimeout(revealAnswerRow, 320);
     };
 
-    root.dataset.viewportLock = 'on';
-    sync();
+    /** What the keyboard is actually covering, once there is one to measure. */
+    const measure = () => {
+      clearTimeout(verify);
+      const inset = viewport ? window.innerHeight - viewport.height : 0;
+      if (inset > 40) knownKeyboardInset = Math.round(inset);
+      reserve(inset);
+    };
 
-    viewport?.addEventListener('resize', sync);
-    viewport?.addEventListener('scroll', sync);
-    window.addEventListener('orientationchange', sync);
+    // Touch only: a mouse means a hardware keyboard and nothing to reserve.
+    const expectKeyboard = () => {
+      if (!window.matchMedia('(pointer: coarse)').matches) return;
+      reserve(knownKeyboardInset || window.innerHeight * KEYBOARD_SHARE);
+      // Nothing has promised a keyboard yet. If none turns up, put the room
+      // back rather than leave the round sitting high for good.
+      clearTimeout(verify);
+      verify = setTimeout(measure, 700);
+    };
+
+    const onInputEvent = (event: Event) => {
+      if (event.target instanceof HTMLInputElement) expectKeyboard();
+    };
+
+    root.dataset.viewportLock = 'on';
+    measure();
+
+    // Both, because neither is enough on its own: the field keeps the focus
+    // from one character to the next, so the tap that summons the keyboard
+    // back is often not a change of focus at all.
+    document.addEventListener('focusin', onInputEvent);
+    document.addEventListener('touchstart', onInputEvent, { passive: true });
+    viewport?.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
 
     return () => {
       clearTimeout(settle);
-      viewport?.removeEventListener('resize', sync);
-      viewport?.removeEventListener('scroll', sync);
-      window.removeEventListener('orientationchange', sync);
+      clearTimeout(verify);
+      document.removeEventListener('focusin', onInputEvent);
+      document.removeEventListener('touchstart', onInputEvent);
+      viewport?.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
       delete root.dataset.viewportLock;
-      root.style.removeProperty('--viewport-height');
+      root.style.removeProperty('--keyboard-inset');
     };
   }, [stageRef]);
 }
@@ -179,7 +208,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const finishedRef = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
 
-  useVisualViewportLock(stageRef);
+  useKeyboardInset(stageRef);
 
   const current = state.queue[0];
   const { feedback } = state;
