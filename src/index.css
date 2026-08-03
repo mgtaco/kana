@@ -72,6 +72,11 @@
 
   --page-max: 68rem;
   --gutter: clamp(1rem, 4vw, 2rem);
+
+  /* How far the browser has slid the visible part of the page away from the top
+     of the layout. A phone does this to bring a focused field towards the
+     middle of the screen — see the round's .runner, which puts it back. */
+  --viewport-offset: 0px;
 }
 
 :root[data-theme='light'] {

@@ -44,6 +44,43 @@ type Action =
 /** Drives both the prompt sliding aside and the answer sliding out behind it. */
 const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
 
+/**
+ * Reports how far the browser has slid the visible part of the page away from
+ * the top of the layout, which it does to bring a focused field towards the
+ * middle of the screen whether or not the field needed moving. The round puts
+ * it straight back (QuizRunner.module.css, .runner); this only has to keep the
+ * figure current.
+ */
+function useVisualViewportOffset() {
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const root = document.documentElement;
+    let current = -1;
+
+    // Read and applied as-is, with nothing smoothing or delaying it. This is
+    // not an animation of ours but a correction to someone else's, and it is
+    // only a correction for as long as it is up to date.
+    const track = () => {
+      const offset = Math.round(viewport.offsetTop);
+      if (offset === current) return;
+      current = offset;
+      root.style.setProperty('--viewport-offset', `${offset}px`);
+    };
+
+    track();
+    viewport.addEventListener('resize', track);
+    viewport.addEventListener('scroll', track);
+
+    return () => {
+      viewport.removeEventListener('resize', track);
+      viewport.removeEventListener('scroll', track);
+      root.style.removeProperty('--viewport-offset');
+    };
+  }, []);
+}
+
 function init(quiz: Quiz): State {
   const now = Date.now();
   return {
@@ -100,6 +137,8 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const [state, dispatch] = useReducer(reducer, quiz, init);
   const [confirmExit, setConfirmExit] = useState(false);
   const finishedRef = useRef(false);
+
+  useVisualViewportOffset();
 
   const current = state.queue[0];
   const { feedback } = state;

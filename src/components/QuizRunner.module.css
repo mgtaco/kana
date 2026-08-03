@@ -1,8 +1,23 @@
+/* Put back whatever the browser has slid the page by, so the round stays where
+   it was laid out.
+ *
+   A phone will not leave a focused field alone. Even sitting in plain view with
+   the keyboard nowhere near it, Safari slides the page to bring it towards the
+   middle of the screen — here, far enough to take the progress bar off the top
+   and clip the card. It cannot be talked out of that, but it does say how far
+   it went, and going back by the same amount costs nothing and settles it.
+ *
+   This works now only because it is no longer load-bearing. The round is laid
+   out to clear the keyboard on its own (see the touch rules at the foot of this
+   file), so undoing the slide leaves everything where it should be. Earlier,
+   when the layout still needed the browser's help to get the field out of the
+   keyboard's way, undoing it took the field back down behind the keyboard. */
 .runner {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+  transform: translateY(var(--viewport-offset));
 }
 
 /* ── Top chrome ───────────────────────────────────────────────────────────── */
