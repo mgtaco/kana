@@ -45,37 +45,48 @@ type Action =
 const REVEAL_SPRING = { type: 'spring', stiffness: 360, damping: 32 } as const;
 
 /**
- * Keeps the progress bar on screen while a phone keyboard is open.
+ * Measures what a phone keyboard has done to the screen, so the round can lay
+ * itself out around it instead of being shoved about by it.
  *
- * A phone lifts a focused field clear of its keyboard by moving the page, and
- * the round riding upwards is exactly right — it is the bar going with it that
- * is not. Everything tried in the way of stopping the page moving made it
- * worse, because none of it stopped anything: hold the page still and Safari
- * heaves the whole screen about to make its point, and get out in front of it
- * by leaving room for the keyboard and the two movements simply add up, which
- * carries the round clean off the top of the screen.
+ * A phone does not merely lift a focused field clear of its keyboard: it slides
+ * the page until the field sits where the browser would like it, near the
+ * middle of what is left. That is a good deal more travel than clearing the
+ * keyboard takes, and it carries the card up out of sight. It also cannot be
+ * prevented — nailing the page down only makes the browser heave harder, and
+ * leaving room for the keyboard ahead of time just adds one movement to the
+ * other.
  *
- * So the page is left entirely alone here, and the one thing that has to stay
- * put is told where the screen has gone. Part of that is sticky's job already;
- * the rest is this, the gap sticky cannot see — between the top of the page's
- * layout and the top of what is actually visible.
+ * So both readings are taken and the round uses them itself: it adds the offset
+ * back, which undoes the slide and leaves it sitting still (QuizRunner.module
+ * .css, .runner), and it gives up the inset from the bottom of the stage, which
+ * is the room the keyboard actually needs. What the browser does no longer
+ * decides anything; it is only measured.
  */
-function useVisualViewportOffset() {
+function useKeyboardMetrics() {
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
 
     const root = document.documentElement;
-    let current = -1;
+    let lastOffset = -1;
+    let lastInset = -1;
 
-    // No debouncing and no easing: this is not an animation of ours, it is a
-    // reading of where the screen is right now, and the bar is only where it
-    // belongs for as long as the reading is current.
+    // No debouncing and no easing on the offset: it is not an animation of
+    // ours but a reading of where the screen is right now, and undoing a slide
+    // only works while the reading is current.
     const track = () => {
       const offset = Math.round(viewport.offsetTop);
-      if (offset === current) return;
-      current = offset;
-      root.style.setProperty('--viewport-offset', `${offset}px`);
+      if (offset !== lastOffset) {
+        lastOffset = offset;
+        root.style.setProperty('--viewport-offset', `${offset}px`);
+      }
+      // Everything the keyboard covers, measured against the layout, which a
+      // keyboard does not resize — only what you can see of it.
+      const inset = Math.max(0, Math.round(window.innerHeight - viewport.height));
+      if (inset !== lastInset) {
+        lastInset = inset;
+        root.style.setProperty('--keyboard-inset', `${inset}px`);
+      }
     };
 
     track();
@@ -86,6 +97,7 @@ function useVisualViewportOffset() {
       viewport.removeEventListener('resize', track);
       viewport.removeEventListener('scroll', track);
       root.style.removeProperty('--viewport-offset');
+      root.style.removeProperty('--keyboard-inset');
     };
   }, []);
 }
@@ -147,7 +159,7 @@ export default function QuizRunner({ quiz, onFinish, onExit }: QuizRunnerProps) 
   const [confirmExit, setConfirmExit] = useState(false);
   const finishedRef = useRef(false);
 
-  useVisualViewportOffset();
+  useKeyboardMetrics();
 
   const current = state.queue[0];
   const { feedback } = state;

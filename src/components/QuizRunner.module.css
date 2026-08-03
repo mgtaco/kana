@@ -1,24 +1,25 @@
+/* Held against the visible screen, whatever the browser does with the page.
+   A phone opening a keyboard does not merely lift the field clear of it — it
+   puts the field where *it* would like it, near the middle of what is left,
+   which is far more travel than clearing the keyboard needs and takes the card
+   up behind the bar with it. That movement cannot be prevented, so it is
+   undone: the offset is exactly how far the page was slid, and adding it back
+   leaves the round sitting still. What room the keyboard really needs is then
+   the stage's business, below, where it can be worked out rather than guessed. */
 .runner {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+  transform: translateY(var(--viewport-offset));
 }
 
 /* ── Top chrome ───────────────────────────────────────────────────────────── */
 
-/* Sticky holds the bar against the top of the page while the page scrolls,
-   which is most of the job. The transform is the rest of it: a phone lifting a
-   focused field clear of its keyboard slides the *visible* part of the page
-   away from the top of the layout, and sticky knows nothing about that — it
-   would sit dutifully at a top that is now off the screen. Adding the offset
-   back is what keeps the bar where it can be seen, whatever the browser does
-   underneath it. */
 .bar {
   position: sticky;
   top: 0;
   z-index: 30;
-  transform: translateY(var(--viewport-offset));
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -84,12 +85,18 @@
 
 /* ── Stage ────────────────────────────────────────────────────────────────── */
 
+/* Now that the round no longer moves with the page, the room a keyboard needs
+   has to be given to it here. Taken off the bottom of the stage, so the round
+   goes on centring itself — in what the keyboard has left rather than in the
+   whole screen. */
 .stage {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
+  padding-bottom: var(--keyboard-inset);
+  transition: padding-bottom var(--dur-base) var(--ease-in-out);
 }
 
 .stageInner {
