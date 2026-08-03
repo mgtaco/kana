@@ -155,7 +155,10 @@
 
 /* ── Returning: the one big call to action ────────────────────────────────── */
 
-.continue {
+/* Scoped to .home so the accent border and ring beat the .card they are drawn
+   over: both are plain class selectors, and at equal specificity it comes down
+   to bundling order, which differs between the dev server and a build. */
+.home .continue {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -166,7 +169,7 @@
   transition: box-shadow var(--dur-base) var(--ease-out);
 }
 
-.continue:hover {
+.home .continue:hover {
   box-shadow: 0 0 0 1px var(--accent), var(--shadow-lg);
 }
 

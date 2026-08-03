@@ -179,7 +179,11 @@
   width: 100%;
 }
 
-.navBtn {
+/* Scoped to the row throughout, not because the nesting means anything but
+   because these properties are ones the shared .btn also sets. At equal
+   specificity the winner is whichever rule the bundler emitted last — which is
+   not the same in a dev server as in a build. One more class settles it. */
+.meetNav .navBtn {
   width: 2.7rem;
   height: 2.7rem;
   flex: none;
@@ -189,7 +193,7 @@
   color: var(--text-muted);
 }
 
-.navBtn:not(:disabled):hover {
+.meetNav .navBtn:not(:disabled):hover {
   color: var(--text);
   border-color: var(--text-faint);
 }
@@ -251,7 +255,10 @@
 }
 
 @media (max-width: 26rem) {
-  .navBtn {
+  /* Scoped to the row rather than written as `.navBtn` alone: the shared .btn
+     sets `display` too, at the same specificity, and whichever rule the
+     bundler happened to emit last would otherwise decide this. */
+  .meetNav .navBtn {
     display: none;
   }
 
