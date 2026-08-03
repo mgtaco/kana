@@ -6,11 +6,22 @@
     <title>Kana — Learn Hiragana</title>
     <meta
       name="description"
-      content="Learn the Japanese hiragana writing system with a complete chart, typing recall drills, and multiple-choice recognition quizzes."
+      content="Learn the Japanese hiragana writing system: guided lessons with a hook for every character, a complete chart, and drills for characters, words and speed."
     />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="./favicon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+
+    <!-- iOS does not support SVG here and silently falls back to a screenshot
+         of the page, so the touch icon has to be a PNG. -->
+    <link rel="apple-touch-icon" href="./icon-180.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Deprecated, kept for iOS versions that only know the prefixed name. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Kana" />
+    <!-- `default` rather than `black-translucent`: it lets iOS tint the status
+         bar from the theme-color metas below, so it follows light and dark by
+         itself. `black-translucent` would put white text on a cream page. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#14120f" media="(prefers-color-scheme: dark)" />
 

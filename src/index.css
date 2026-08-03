@@ -101,6 +101,10 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* No rubber-banding past the ends of the page, and no pull-to-refresh — both
+     read as "this is a web page" the moment you touch the screen, and the
+     second one can throw away a round mid-answer. */
+  overscroll-behavior: none;
 }
 
 body {
@@ -138,6 +142,20 @@ button {
   background: none;
   border: none;
   padding: 0;
+}
+
+/* Controls behave like controls: no grey flash on tap, no 300ms wait while the
+   browser decides whether a second tap is coming, and no text selection from a
+   press that lingers. Deliberately *not* applied to the page at large — example
+   words, readings and meanings are worth copying out. */
+button,
+[role='button'],
+label,
+summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 h1,

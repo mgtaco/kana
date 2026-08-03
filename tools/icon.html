@@ -1,0 +1,87 @@
+<!doctype html>
+<!--
+  The source of the app's PNG icons. Rasterised by hand, once, with a headless
+  Chromium — no icon generator, no new dependency, and nothing added to the
+  build. Regenerate with:
+
+    SHELL=path/to/chrome-headless-shell
+    shot () {  # size  style  outfile
+      "$SHELL" --disable-gpu --hide-scrollbars \
+        --default-background-color=00000000 --virtual-time-budget=5000 \
+        --screenshot="$3" --window-size="$1,$1" \
+        "file://$PWD/tools/icon.html?style=$2"
+    }
+    shot 512 rounded  public/icon-512.png
+    shot 192 rounded  public/icon-192.png
+    shot 180 bleed    public/icon-180.png
+    shot 512 maskable public/icon-maskable-512.png
+
+  chrome-headless-shell rather than `chrome --headless`: the new headless mode
+  reports a viewport ~87px shorter than the window it was asked for, and then
+  screenshots the window, so every icon comes out with its bottom edge cut off.
+
+  Three styles, because the three places an icon lands want different things:
+
+    rounded   transparent corners, for Android and desktop Chrome, which show
+              the icon as it is
+    bleed     square to the edges, for iOS, which applies its own rounded mask
+              and would otherwise round an already-rounded icon
+    maskable  square to the edges with the glyph pulled into the middle 80%,
+              which is the safe zone Android may crop an adaptive icon to
+
+  The type is Noto Sans JP, the same face the app renders kana in, so the icon
+  and the app agree. Baking the glyph into a PNG also settles the one weakness
+  of favicon.svg, which can only draw あ if the viewer happens to have a
+  Japanese font installed.
+-->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kana icon</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500&display=block"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+      }
+      .icon {
+        display: grid;
+        place-items: center;
+        width: 100vw;
+        height: 100vw;
+        background: #c8452f;
+        color: #fdf8f3;
+        /* 'Noto Sans JP' first; IPAPGothic is the local stand-in when the web
+           font cannot be fetched. */
+        font-family: 'Noto Sans JP', 'IPAPGothic', 'IPAGothic', sans-serif;
+        font-weight: 500;
+        line-height: 1;
+      }
+      .icon[data-style='rounded'] {
+        border-radius: 22%;
+      }
+      .glyph {
+        /* Nudged up off the optical centre: あ carries more ink below its
+           midline than above, so a mathematically centred one sits low. */
+        transform: translateY(-2%);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="icon"><span class="glyph">あ</span></div>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const style = params.get('style') || 'rounded';
+      const icon = document.querySelector('.icon');
+      icon.dataset.style = style;
+      // The maskable icon may be cropped to a circle inscribed in the middle
+      // 80%, so its glyph is drawn smaller to stay clear of the crop.
+      document.querySelector('.glyph').style.fontSize = style === 'maskable' ? '52vw' : '64vw';
+    </script>
+  </body>
+</html>
